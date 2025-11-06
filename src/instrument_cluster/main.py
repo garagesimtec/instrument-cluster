@@ -10,8 +10,8 @@ def run(conf: Config) -> int:
 
     screen = pygame.display.set_mode((conf.width, conf.height))
     dashboard = DashboardState()
-    state_manager = StateManager(dashboard)
-    dashboard.state_manager = state_manager
+    state_manager = StateManager(screen, dashboard)
+
     running = True
     clock = pygame.time.Clock()
     fps = 60
@@ -23,8 +23,9 @@ def run(conf: Config) -> int:
                 running = False
             state_manager.handle_event(event)
         state_manager.update(dt)
-        state_manager.draw(screen)
-        pygame.display.flip()
+        dirty_rects = state_manager.draw(screen)
+        if dirty_rects:
+            pygame.display.update(dirty_rects)
 
     pygame.quit()
     return 0

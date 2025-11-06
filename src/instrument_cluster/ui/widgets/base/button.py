@@ -1,7 +1,9 @@
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Literal, Optional, Tuple
 
 import pygame
+from pygame.sprite import DirtySprite
 
 from ...colors import Color
 from ...utils import FontFamily, load_font
@@ -30,9 +32,17 @@ class ButtonState(Enum):
     IDLE = auto()
     PRESSED = auto()
     RELEASED = auto()
+    LONGPRESSED = auto()
 
 
-class AbstractButton:
+@dataclass(frozen=True)
+class ButtonEvents:
+    pressed: int
+    released: int
+    long_pressed: int | None = None
+
+
+class AbstractButton(DirtySprite):
     """Base class for buttons with unified mouse/touch handling.
 
     Tracks a simple state machine (IDLE -> PRESSED -> RELEASED) and normalizes
@@ -52,13 +62,12 @@ class AbstractButton:
     def __init__(
         self,
         rect,
-        event_type_pressed: pygame.event.EventType,
-        event_type_released: pygame.event.EventType,
+        events: ButtonEvents,
         event_data=None,
     ):
+        super().__init__()
         self.rect = pygame.Rect(rect)
-        self.event_type_pressed = event_type_pressed
-        self.event_type_released = event_type_released
+        self.events = events
         self.event_data = event_data or {}
         self.state = ButtonState.IDLE
 
@@ -69,7 +78,11 @@ class AbstractButton:
         self._active_pointer = None
 
         self._pressed_time = 0.0
+        self._long_fired = False
         self.auto_reset_released = True  # one-tick RELEASED state
+
+    def _on_visual_change(self):
+        self.dirty = 1
 
     def draw(self, surface):
         """Draw the button.
@@ -118,6 +131,7 @@ class AbstractButton:
         return False if xy is None else self.is_inside_xy(*xy)
 
     def handle_event(self, event):
+        prev_state = self.state
         # Normalize to a "pointer id":
         # - mouse -> 0
         # - touch -> event.finger_id
@@ -132,32 +146,55 @@ class AbstractButton:
             if self.is_inside(event):
                 if self.state != ButtonState.PRESSED:
                     pygame.event.post(
-                        pygame.event.Event(self.event_type_pressed, self.event_data)
+                        pygame.event.Event(self.events.pressed, self.event_data)
                     )
                 self.state = ButtonState.PRESSED
                 self._active_pointer = pid
+                self._long_fired = False
+                self._pressed_time = 0.0
 
         elif event.type in (pygame.MOUSEBUTTONUP, pygame.FINGERUP):
             if self.state == ButtonState.PRESSED and self._active_pointer == pid:
                 if self.is_inside(event):
-                    pygame.event.post(
-                        pygame.event.Event(self.event_type_released, self.event_data)
-                    )
-                    self.state = ButtonState.RELEASED
+                    if not self._long_fired:
+                        pygame.event.post(
+                            pygame.event.Event(self.events.released, self.event_data)
+                        )
+                        self.state = ButtonState.RELEASED
                 else:
                     self.state = ButtonState.IDLE
                 self._active_pointer = None
+                self._long_fired = False
+                self._pressed_time = 0.0
+
+        # fire only if visual state changed
+        if self.state != prev_state:
+            self._on_visual_change()
 
     def update(self, dt: float) -> None:
         """Keeps a running timer while pressed."""
+
+        prev_state = self.state
+
         if self.state == ButtonState.PRESSED:
             self._pressed_time += dt
+            if not self._long_fired and self._pressed_time >= 3.0:
+                if self.events.long_pressed is not None:
+                    pygame.event.post(
+                        pygame.event.Event(self.events.long_pressed, self.event_data)
+                    )
+                self._long_fired = True
+                self.state = ButtonState.LONGPRESSED
         else:
             self._pressed_time = 0.0
 
         # ButtonState.RELEASED lasts exactly one update tick
         if self.state == ButtonState.RELEASED and self.auto_reset_released:
             self.state = ButtonState.IDLE
+
+        # recomposite only on state transition
+        if self.state != prev_state:
+            self._on_visual_change()
 
 
 class ButtonGroup(Container):
@@ -249,8 +286,7 @@ class Button(AbstractButton):
         self,
         rect,
         text,
-        event_type_pressed,
-        event_type_released,
+        events: ButtonEvents | None = None,
         event_data=None,
         font=None,
         text_color=None,
@@ -274,9 +310,13 @@ class Button(AbstractButton):
         ] = (Color.DARK_BLUE.rgb(), Color.BLACK.rgb()),
         gradient_dir: Literal["vertical", "horizontal"] = "vertical",
     ):
-        super().__init__(rect, event_type_pressed, event_type_released, event_data)
         if event_data is None:
-            self.event_data = {"label": text}
+            event_data = {"label": text}
+        if events is None:
+            events = ButtonEvents(pressed=pygame.NOEVENT, released=pygame.NOEVENT)
+
+        super().__init__(rect, events, event_data)
+
         self._text = text
         self.font = font or load_font(size=32, family=FontFamily.PIXEL_TYPE)
         self.color = text_color or Color.WHITE.rgb()
@@ -319,6 +359,23 @@ class Button(AbstractButton):
             "compose_key": None,
             "composed": None,  # pygame.Surface (size == self.rect.size)
         }
+
+        # build initial image
+        self._recompose_and_mark_dirty()
+
+    def _recompose_and_mark_dirty(self):
+        """Rebuild self.image from current state and mark dirty."""
+        text_surf = self._ensure_text_surface()
+        icon_surf = self._ensure_icon_surface()
+        pos = self._ensure_layout(text_surf, icon_surf)
+        composed = self._ensure_composite(text_surf, icon_surf, pos)
+        # ensure fast blits with per-pixel alpha
+        self.image = composed.convert_alpha()
+        self.dirty = 1
+
+    # whenever visuals change, this will be called
+    def _on_visual_change(self):
+        self._recompose_and_mark_dirty()
 
     def _font_fingerprint(self, f: pygame.font.Font) -> tuple:
         return (id(f), f.get_height(), f.get_ascent(), f.get_descent())
@@ -720,4 +777,9 @@ class Button(AbstractButton):
 
     @text.setter
     def text(self, value):
-        self._text = value
+        if value != self._text:
+            self._text = value
+            # invalidate text cache key
+            self._cache["text_key"] = None
+            self._cache["compose_key"] = None
+            self._on_visual_change()

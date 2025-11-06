@@ -9,8 +9,21 @@ from ..states.state_types import SupportsStateChange
 class State(ABC):
     def __init__(self, state_manager: Optional[SupportsStateChange] = None):
         self.state_manager = state_manager
-        self._listeners = []
+        self.screen: pygame.Surface | None = None
+        self.background: pygame.Surface | None = None
+        self.group = None
         self._pending_transition = None
+
+    def background_color(self) -> tuple[int, int, int]:
+        return (0, 0, 0)
+
+    def draw_static_background(self, bg: pygame.Surface) -> None:
+        """Draw lines, frames onto background once."""
+        pass
+
+    def create_group(self):
+        """Return a LayeredDirty with sprites or None."""
+        return None
 
     @abstractmethod
     def handle_event(self, event) -> bool:
@@ -21,21 +34,49 @@ class State(ABC):
         return False
 
     @abstractmethod
-    def draw(self, surface: pygame.surface.Surface):
+    def draw(self, surface: pygame.Surface):
         """
-        Draw all widgets on surface
+        Incremental dirty draw; states override.
         """
-        pass
+        return []
 
-    def enter(self):
-        """
-        Add extra listeners, start actions
-        """
+    def enter(self, screen: pygame.Surface):
+        self.screen = screen
+
+        self.background = pygame.Surface(screen.get_size()).convert()
+        self.background.fill(self.background_color())
+
+        # Let the concrete state add static stuff
+        self.draw_static_background(self.background)
+
+        # Initial blit, StateManager.full_paint() will repaint anyway
+        screen.blit(self.background, (0, 0))
+
+        # Build sprite group (DirtySprites only)
+        self.group = self.create_group()
+
+        # Ask manager to do a full update once
+        return [screen.get_rect()]
 
     def exit(self):
         """
         Remove extra listeners, cleanup
         """
+        pass
+
+    def full_paint(self, surface: pygame.Surface):
+        """Paint whole background + sprites once."""
+        if self.background is not None:
+            surface.blit(self.background, (0, 0))
+
+        group = getattr(self, "group", None)
+        if group:
+            # Force all sprites to redraw on this pass
+            for sprite in group.sprites():
+                sprite.dirty = 1
+
+            group.clear(surface, self.background)
+            group.draw(surface)
 
     def update(self, dt: float):
         """

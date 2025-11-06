@@ -9,8 +9,11 @@ from ..states.state_types import SupportsStateChange
 
 
 class StateManager(SupportsStateChange):
-    def __init__(self, initial_state: Optional[State] = None):
+    def __init__(self, screen: pygame.Surface, initial_state: Optional[State] = None):
+        self._screen = screen
         self._stack: List[State] = []
+        self._pending_rects: list[pygame.Rect] = []
+
         if initial_state is not None:
             self.push_state(initial_state)
 
@@ -19,55 +22,48 @@ class StateManager(SupportsStateChange):
         return self._stack[-1] if self._stack else None
 
     def handle_event(self, event: pygame.event.Event) -> bool:
-        """Dispatch an event to states from top to bottom until handled.
-
-        Iterates the stack in reverse (top-first). For each state:
-            - Calls `state.handle_event(event)` and coerces the result to `bool`.
-            - Stops at the first state that returns truthy and returns True.
-
-        Args:
-            event: a pygame.event.Event object.
-
-        Returns:
-            True if any state handled the event; otherwise False.
-        """
+        """Dispatch event to base state stack."""
+        # handle base states top to bottom
         for state in reversed(self._stack):
-            if bool(state.handle_event(event)):
-                return True
+            try:
+                if bool(state.handle_event(event)):
+                    return True
+            except Exception as e:
+                print(e)
         return False
 
     def update(self, dt: float):
-        """Update states in stack order using a snapshot for stability.
+        """Update base states (snapshot) and all overlays."""
+        try:
+            self.current().update(dt)
+        except Exception:
+            # Misbehaving state's update shouldn't break the loop
+            pass
 
-        Strategy:
-            - Take a shallow snapshot of the current stack to avoid issues if
-              callbacks mutate the stack during iteration.
-            - For each state in the snapshot:
-                * Skip if it has been removed from the live stack.
-                * Call `state.update(dt)`; exceptions are caught and suppressed
-                  so a misbehaving state does not break the loop.
+    def current(self):
+        return self._stack[-1]
 
-        Args:
-            dt: Time delta since the last update (unit in seconds).
-        """
-        if not self._stack:
-            return
-        snapshot = list(self._stack)
+    def draw(self, surface: pygame.Surface):
+        s = self.current()
+        if not s:
+            return []
 
-        for s in snapshot:
-            if s not in self._stack:
-                continue
+        # If we have queued “full rects”, paint base + overlays once, then return those rects
+        if getattr(self, "_pending_rects", None):
             try:
-                s.update(dt)
-            except Exception:
-                # Misbehaving state's update shouldn't brake the loop
-                pass
+                s.full_paint(surface)  # base state
+            except Exception as e:
+                print("full_paint error:", e)
+            rects = self._pending_rects
+            self._pending_rects = []
+            return rects
 
-    def draw(self, surface: pygame.surface.Surface):
-        if self._stack:
-            # Only the top state draws,
-            # overlays control their visuals!
-            self._stack[-1].draw(surface)
+        # Normal incremental: base first, then overlays
+        rects: list[pygame.Rect] = []
+        r = s.draw(surface)
+        if r:
+            rects.extend(r)
+        return rects
 
     def change_state(self, new_state: State):
         if self._stack:
@@ -87,11 +83,15 @@ class StateManager(SupportsStateChange):
         if top is not None:
             try:
                 top.on_pause()
-            except Exception:
-                pass
+            except Exception as e:
+                print(e)
         state.state_manager = self
         self._stack.append(state)
-        state.enter()
+        try:
+            rects = state.enter(self._screen) or [self._screen.get_rect()]
+            self._pending_rects = list(rects)
+        except Exception as e:
+            print(e)
 
     def pop_state(self):
         if not self._stack:
@@ -103,8 +103,8 @@ class StateManager(SupportsStateChange):
         except Exception:
             pass
         if self._stack:
+            state = self._stack[-1]
             try:
-                state = self._stack[-1]
                 state.on_resume()
-            except Exception:
-                pass
+            finally:
+                self._pending_rects = [self._screen.get_rect()]
