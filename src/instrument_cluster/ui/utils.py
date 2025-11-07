@@ -25,6 +25,7 @@ class FontFamily(Enum):
     PIXEL_TYPE = ("pixeltype", "pixeltype")
     MATERIAL_SYMBOLS = ("material_symbols", "material-symbols-rounded-latin-300-normal")
     D_DIN_EXP_BOLD = ("d-din", "D-DINExp-Bold")
+    D_DIN_EXP = ("d-din", "D-DINExp")
 
     def __init__(self, subdir: str, basename: str):
         self.subdir = subdir  # folder under assets/fonts

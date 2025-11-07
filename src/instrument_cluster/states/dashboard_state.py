@@ -22,6 +22,7 @@ from ..ui.events import (
 )
 from ..ui.utils import FontFamily, load_font
 from ..ui.widgets.base.button import Button, ButtonEvents
+from ..ui.widgets.bestlap_widget import BestLapWidget
 from ..ui.widgets.gear_widget import GearWidget
 from ..ui.widgets.speed_widget import SpeedWidget
 
@@ -88,7 +89,7 @@ class DashboardState(State):
 
         self.ui.add(self.setup)
 
-        self.gear_widget = GearWidget(
+        gear_widget = GearWidget(
             rect=(
                 ConfigManager.get_config().width // 2,
                 400,
@@ -97,7 +98,7 @@ class DashboardState(State):
             )
         )
 
-        self.speed_widget = SpeedWidget(
+        speed_widget = SpeedWidget(
             rect=(
                 ConfigManager.get_config().width // 2,
                 100,
@@ -106,7 +107,15 @@ class DashboardState(State):
             )
         )
 
-        self.widgets.add(self.gear_widget, self.speed_widget)
+        bestlap_widget = BestLapWidget(
+            rect=(
+                186,
+                68,
+                352,
+                92,
+            )
+        )
+        self.widgets.add(gear_widget, speed_widget, bestlap_widget)
 
     def background_color(self):
         return Color.BLACK.rgb()
