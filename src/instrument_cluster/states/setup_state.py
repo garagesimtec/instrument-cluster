@@ -20,7 +20,7 @@ class SetupState(State):
 
         self.title_label = Label(
             text="System settings",
-            font=load_font(size=64, family=FontFamily.PIXEL_TYPE),
+            font=load_font(size=68, family=FontFamily.PIXEL_TYPE),
             color=Color.WHITE.rgb(),
             pos=HEADER_TITLE_TOPLEFT,
             center=False,

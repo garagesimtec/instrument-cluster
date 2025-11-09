@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.11.7",
     "pygame>=2.6.1",
+    "scipy>=1.11.4",
 ]
 
 [project.scripts]

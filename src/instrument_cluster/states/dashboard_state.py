@@ -6,6 +6,7 @@ from ..config import Config, ConfigManager
 from ..states.setup_state import SetupState
 from ..states.state import State
 from ..states.state_manager import StateManager
+from ..telemetry.feed import Feed
 from ..telemetry.mode import TelemetryMode
 from ..telemetry.models import TelemetryFrame
 from ..telemetry.source import TelemetrySource
@@ -23,7 +24,10 @@ from ..ui.events import (
 from ..ui.utils import FontFamily, load_font
 from ..ui.widgets.base.button import Button, ButtonEvents
 from ..ui.widgets.bestlap_widget import BestLapWidget
+from ..ui.widgets.delta_widget import DeltaWidget
 from ..ui.widgets.gear_widget import GearWidget
+from ..ui.widgets.lap_widget import LapWidget
+from ..ui.widgets.predictedlap_widget import PredictedLapWidget
 from ..ui.widgets.speed_widget import SpeedWidget
 
 
@@ -95,7 +99,8 @@ class DashboardState(State):
                 400,
                 186,
                 232,
-            )
+            ),
+            show_border=False,
         )
 
         speed_widget = SpeedWidget(
@@ -115,7 +120,21 @@ class DashboardState(State):
                 92,
             )
         )
-        self.widgets.add(gear_widget, speed_widget, bestlap_widget)
+
+        lastlap_widget = LapWidget(rect=(870, 440, 286, 92))
+
+        feed = Feed()
+        predictedlap_widget = PredictedLapWidget(rect=(186, 162, 352, 92), feed=feed)
+        diff_widget = DeltaWidget(rect=(870, 340, 286, 92), feed=feed)
+
+        self.widgets.add(
+            gear_widget,
+            speed_widget,
+            bestlap_widget,
+            predictedlap_widget,
+            lastlap_widget,
+            diff_widget,
+        )
 
     def background_color(self):
         return Color.BLACK.rgb()
@@ -169,6 +188,5 @@ class DashboardState(State):
             self.state_manager.push_state(SetupState(self.state_manager))
             return True
         if event.type == BUTTON_SETUP_LONGPRESSED:
-            pass
             return True
         return False

@@ -3,12 +3,13 @@ from typing import Optional
 import pygame
 from pygame.sprite import DirtySprite
 
+from ...telemetry.feed import Feed
 from ...telemetry.models import TelemetryFrame
 from ..colors import Color
 from ..utils import FontFamily, load_font
 
 
-class BestLapWidget(DirtySprite):
+class PredictedLapWidget(DirtySprite):
     """
     Bordered panel with a header text and a centered dynamic value underneath.
     Redraws only when the dynamic value changes.
@@ -17,9 +18,10 @@ class BestLapWidget(DirtySprite):
     def __init__(
         self,
         rect: tuple[int, int, int, int],
+        feed: Feed,
         *,
         anchor: str = "center",  # "topleft" or "center"
-        header_text: str = "Fastest   Lap",
+        header_text: str = "Predicted   Lap",
         bg_color: tuple[int, int, int] = Color.BLACK.rgb(),
         text_color: tuple[int, int, int] = Color.WHITE.rgb(),
         border_color: tuple[int, int, int] = Color.LIGHT_GREY.rgb(),
@@ -30,6 +32,9 @@ class BestLapWidget(DirtySprite):
         antialias: bool = True,
     ):
         super().__init__()
+
+        self.feed = feed
+
         px, py, self.w, self.h = rect
 
         # place widget based on anchor
@@ -117,7 +122,7 @@ class BestLapWidget(DirtySprite):
         # store header bottom to position value nicely later
         self._header_bottom = header_rect.bottom
 
-    def _render_value(self, speed_str: str):
+    def _render_value(self, value: str):
         self._ensure_digit_cache()
 
         # compute value area
@@ -132,13 +137,13 @@ class BestLapWidget(DirtySprite):
         pygame.draw.rect(self.image, self.bg_color, area)
 
         # NEW: total width from per-char advances
-        advances = [self._adv.get(ch, self._advance) for ch in speed_str]
-        total_w = sum(advances) + max(0, len(speed_str) - 1) * self.digit_gap
+        advances = [self._adv.get(ch, self._advance) for ch in value]
+        total_w = sum(advances) + max(0, len(value) - 1) * self.digit_gap
 
         x = area.centerx - total_w // 2
         y = area.centery - self.value_offset_y - self._digit_h // 2
 
-        for i, ch in enumerate(speed_str):
+        for i, ch in enumerate(value):
             slot_w = advances[i]
             surf = self._digit_surf.get(ch)
             if surf is None:
@@ -176,6 +181,10 @@ class BestLapWidget(DirtySprite):
             self.reset()
             return
 
-        if not (packet.best_lap_time == 0 or packet.best_lap_time is None):
-            best_lap_time = float(packet.best_lap_time * 1e-3)
-            self.set_lap(best_lap_time)
+        if not (packet.last_lap_time == 0 or packet.last_lap_time is None):
+            last_lap_time = float(packet.last_lap_time * 1e-3)
+            delta = self.feed.delta_s if self.feed.has_delta else 0.0
+
+            predicted_lap_time = last_lap_time + delta
+
+            self.set_lap(predicted_lap_time)

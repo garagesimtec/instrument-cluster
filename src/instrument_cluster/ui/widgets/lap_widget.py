@@ -8,7 +8,7 @@ from ..colors import Color
 from ..utils import FontFamily, load_font
 
 
-class BestLapWidget(DirtySprite):
+class LapWidget(DirtySprite):
     """
     Bordered panel with a header text and a centered dynamic value underneath.
     Redraws only when the dynamic value changes.
@@ -19,7 +19,7 @@ class BestLapWidget(DirtySprite):
         rect: tuple[int, int, int, int],
         *,
         anchor: str = "center",  # "topleft" or "center"
-        header_text: str = "Fastest   Lap",
+        header_text: str = "Lap   Time",
         bg_color: tuple[int, int, int] = Color.BLACK.rgb(),
         text_color: tuple[int, int, int] = Color.WHITE.rgb(),
         border_color: tuple[int, int, int] = Color.LIGHT_GREY.rgb(),
@@ -176,6 +176,7 @@ class BestLapWidget(DirtySprite):
             self.reset()
             return
 
-        if not (packet.best_lap_time == 0 or packet.best_lap_time is None):
-            best_lap_time = float(packet.best_lap_time * 1e-3)
-            self.set_lap(best_lap_time)
+        if not (packet.last_lap_time == 0 or packet.last_lap_time is None):
+            last_lap_time = float(packet.last_lap_time * 1e-3)
+
+            self.set_lap(last_lap_time)

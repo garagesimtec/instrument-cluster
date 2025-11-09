@@ -58,6 +58,7 @@ class TelemetryFrame(BaseModel):
     lap_count: int | None = None
     laps_in_race: int | None = None
     best_lap_time: int | None = None
+    last_lap_time: int | None = None
     flags: Flags = None
     rpm_alert: Bounds = None
     wheels: Wheels = None
