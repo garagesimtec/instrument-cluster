@@ -2,6 +2,7 @@ from typing import Optional
 
 from pygame.sprite import LayeredDirty
 
+from ..backlight import Backlight
 from ..config import Config, ConfigManager
 from ..states.setup_state import SetupState
 from ..states.state import State
@@ -154,6 +155,12 @@ class DashboardState(State):
 
     def enter(self, screen):
         super().enter(screen)
+        try:
+            bl = Backlight()
+            if bl.available():
+                bl.set_percent(ConfigManager.get_config().brightness)
+        except Exception:
+            pass
 
     def draw(self, surface):
         # clear both groups against same background

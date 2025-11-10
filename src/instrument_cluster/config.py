@@ -16,6 +16,7 @@ class Config:
     telemetry_mode: str = field(default=TelemetryMode.DEMO.value)
     udp_host: str = field(default="127.0.0.1")
     udp_port: int = field(default=5600)
+    brightness: int = 50
 
     @classmethod
     def parse_config(cls, path: Path) -> "Config":
@@ -64,4 +65,10 @@ class ConfigManager:
         cfg.telemetry_mode = (
             mode.value if isinstance(mode, TelemetryMode) else TelemetryMode(mode).value
         )
+        cfg.write_to_file(cls.path)
+
+    @classmethod
+    def set_brightness_percent(cls, brightness: str) -> None:
+        cfg = cls.get_config()
+        cfg.brightness = brightness
         cfg.write_to_file(cls.path)
