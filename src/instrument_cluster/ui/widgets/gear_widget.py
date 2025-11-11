@@ -24,7 +24,7 @@ class GearWidget(DirtySprite):
         border_width: int = 2,
         border_radius: int = 4,
         show_border: bool = True,
-        header_margin: int = 8,  # brings `header_text` down by x pixels
+        header_margin: int = 6,  # brings `header_text` down by x pixels
         antialias: bool = True,
     ):
         super().__init__()
@@ -41,7 +41,7 @@ class GearWidget(DirtySprite):
             raise ValueError(f"Unsupported anchor: {anchor}")
 
         self.font_header = load_font(size=32, family=FontFamily.PIXEL_TYPE)
-        self.font_value = load_font(size=230, family=FontFamily.D_DIN_EXP_BOLD)
+        self.font_value = load_font(size=240, family=FontFamily.D_DIN_EXP_BOLD)
         self.header_text = header_text
         self.value_offset_y = 4
         self.bg_color = bg_color
@@ -58,7 +58,7 @@ class GearWidget(DirtySprite):
 
         self._last_gear_str = None
         self._render_border_and_header()  # border and header are static
-        self.set_gear("P")  # initial placeholder
+        self.set_gear(-1)  # initial placeholder
         self.visible = 1
         self.dirty = 2
 
@@ -105,12 +105,12 @@ class GearWidget(DirtySprite):
         self.image.blit(value_surf, value_rect)
 
     def set_gear(self, gear: int):
-        if gear is None:
-            gear_str = "N"
-        elif gear == 0:
+        if gear == 0:
             gear_str = "R"
         elif gear == -1:
             gear_str = "N"
+        elif gear == -2:
+            gear_str = "P"
         else:
             gear_str = str(gear)
 
@@ -122,9 +122,10 @@ class GearWidget(DirtySprite):
             self.dirty = 1
 
     def update(self, packet: TelemetryFrame | None, dt: float):
-        if packet is None:
-            return
-        if not packet.flags.in_gear:
-            self.set_gear(-1)  # maps to "N"
-            return
-        self.set_gear(packet.current_gear)
+        flags = getattr(packet, "flags", None)
+        car_on_track = bool(getattr(flags, "car_on_track", False))
+        if car_on_track:
+            gear = int(getattr(packet, "current_gear", 0) or 0)
+        else:
+            gear = -2  # P
+        self.set_gear(gear)

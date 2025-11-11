@@ -95,6 +95,8 @@ class EnterIPState(State):
             padding=(0, 0),
             icon_cell_width=36,
             pressed_gradient=(Color.RPM_DARK_RED.rgb(), Color.BLACK.rgb()),
+            border_top_right_radius=4,
+            border_bottom_right_radius=4,
         )
 
         ok_button = Button(

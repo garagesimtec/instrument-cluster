@@ -313,6 +313,8 @@ class Button(AbstractButton):
             tuple[tuple[int, int, int], tuple[int, int, int]]
         ] = (Color.DARK_BLUE.rgb(), Color.BLACK.rgb()),
         gradient_dir: Literal["vertical", "horizontal"] = "vertical",
+        border_top_right_radius=None,
+        border_bottom_right_radius=None,
     ):
         if event_data is None:
             event_data = {"label": text}
@@ -346,6 +348,9 @@ class Button(AbstractButton):
         self.bg_color = bg_color
         self.pressed_gradient = pressed_gradient
         self.gradient_dir = gradient_dir
+
+        self.border_top_right_radius = border_top_right_radius
+        self.border_bottom_right_radius = border_bottom_right_radius
 
         # cache for gradient surfaces
         self._grad_cache = {
@@ -699,9 +704,26 @@ class Button(AbstractButton):
             )
 
         # Border
-        pygame.draw.rect(
-            composed, border_color, composed.get_rect(), width=2, border_radius=4
-        )
+        if (
+            self.border_bottom_right_radius is not None
+            and self.border_top_right_radius is not None
+        ):
+            pygame.draw.rect(
+                composed,
+                border_color,
+                composed.get_rect(),
+                width=2,
+                border_bottom_right_radius=self.border_bottom_right_radius,
+                border_top_right_radius=self.border_top_right_radius,
+            )
+        else:
+            pygame.draw.rect(
+                composed,
+                border_color,
+                composed.get_rect(),
+                width=2,
+                border_radius=4,
+            )
 
         # Content (convert absolute positions to local coords in composed surface)
         if icon_surf is not None and icon_x is not None:

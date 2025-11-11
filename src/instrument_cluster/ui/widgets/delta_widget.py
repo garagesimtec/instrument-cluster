@@ -7,6 +7,7 @@ import pygame
 from pygame.sprite import DirtySprite
 from scipy.spatial import cKDTree as KDTree
 
+from ...logger import Logger
 from ...telemetry.feed import Feed
 from ...telemetry.models import TelemetryFrame
 from ..colors import Color
@@ -38,6 +39,7 @@ class DeltaWidget(DirtySprite):
     ):
         super().__init__()
 
+        self.logger = Logger(__class__.__name__).get()
         self.feed = feed
 
         px, py, self.w, self.h = rect
@@ -71,23 +73,22 @@ class DeltaWidget(DirtySprite):
         self.rect = self.image.get_rect(topleft=(tlx, tly))
 
         self._last_value_str = None
-        # cache of digit atlases keyed by (font_id, antialias, color_rgb)
-        # self._digit_cache = {}
 
-        self._render_border_and_header()  # border and header are static
+        self._render_border_and_header()
         self.set_delta()
         self.visible = 1
         self.dirty = 2
 
+        self._lap_index = -1
+
         # timing
-        self._lap_index: int = -1
         self._lap_time_s: float = 0.0
         self._best_time_s: float = float("inf")
 
         # kd-tree
         self._kdtree = None
         self._kd_leafsize = int(kd_leafsize)
-        self._min_dist_m = 2.0  # 1–5 m
+        self._min_dist_m = 5.0  # 1–5 m
         self._min_dist_sq = self._min_dist_m * self._min_dist_m
 
         self._xs = array("f")
@@ -99,13 +100,33 @@ class DeltaWidget(DirtySprite):
         self._best_pts_np = None
         self._best_times_np = None
 
-        self.knn_k = 4
-        self.idw_eps = 1e-6
-        self.idw_power = 1.0
+        self.max_nn_radius = 15
 
-        # delta moving average
-        self._delta_vis = 0.0
-        self._delta_alpha = 0.25  # 0.15–0.35
+        # update delta every x seconds
+        self._delta_timer = 0.0
+        self._last_delta_value = None
+        self.delta_update_period = 0.15  # seconds
+        self._last_ref_idx = None
+        # max allowed index jump along the reference
+        self._max_ref_jump = 30
+
+    @property
+    def lap_index(self):
+        return self._lap_index
+
+    @lap_index.setter
+    def lap_index(self, value):
+        if value != self._lap_index:
+            self._lap_index = value
+            self._lap_time_s = 0.0
+            self._xs.clear()
+            self._zs.clear()
+            self._times.clear()
+            self._last_vx = None
+            self._last_vz = None
+
+            if hasattr(self, "_ema_ref_time"):
+                delattr(self, "_ema_ref_time")
 
     def _get_digit_metrics(self, color: tuple[int, int, int]):
         # cache of digit atlases keyed by (font_id, antialias, color_rgb)
@@ -153,7 +174,6 @@ class DeltaWidget(DirtySprite):
         header_rect = header_surf.get_rect(midtop=(self.w // 2, self.header_margin))
         self.image.blit(header_surf, header_rect)
 
-        # store header bottom to position value nicely later
         self._header_bottom = header_rect.bottom
 
     def _render_value(self, value_str: str, color: tuple[int, int, int]):
@@ -183,7 +203,7 @@ class DeltaWidget(DirtySprite):
         for i, ch in enumerate(value_str):
             slot_w = advances[i]
             ch_surf = surf_map.get(ch)
-            if ch_surf is None:  # fallback for any stray char
+            if ch_surf is None:
                 ch_surf = self.font_value.render(ch, self.antialias, color)
             gx = x + (slot_w - ch_surf.get_width()) // 2
             gy = y + (digit_h - ch_surf.get_height()) // 2
@@ -191,14 +211,14 @@ class DeltaWidget(DirtySprite):
             x += slot_w + self.digit_gap
 
     def set_delta(self, value: Optional[float] = None):
-        value_str, color = self.format_delta(value)
+        value_str, color = self._format_delta(value)
 
         if value_str != self._last_value_str:
             self._last_value_str = value_str
             self._render_value(value_str, color)
             self.dirty = 1
 
-    def format_delta(self, value: Optional[float]):
+    def _format_delta(self, value: Optional[float]):
         if value is None or not math.isfinite(value):
             return "", self.text_color
 
@@ -214,30 +234,22 @@ class DeltaWidget(DirtySprite):
         lap_count = int(getattr(packet, "lap_count", 0) or 0)
         pos = getattr(packet, "position", None)
 
-        if lap_count == 0 or lap_count is None:
-            self.reset()
+        if lap_count in (0, None):
+            if self.lap_index != -1:
+                self.reset()
             return
 
-        if lap_count != self._lap_index:
-            if self._lap_index > 0 and len(self._xs) > 0:
+        if lap_count != self.lap_index:
+            if self.lap_index > 0 and len(self._xs) > 0:
                 prev_time = self._lap_time_s
                 # always build "last lap" reference and optionally track best
                 self._build_reference_from_current()
                 self._best_time_s = min(self._best_time_s, prev_time)
 
-            # start new lap
-            self._lap_index = lap_count
-            self._lap_time_s = 0.0
-            self._xs.clear()
-            self._zs.clear()
-            self._times.clear()
-            self._last_vx = None
-            self._last_vz = None
-            # pygame.event.post(
-            #     pygame.event.Event(NEW_LAP_STARTED, {"lap_index": lap_count})
-            # )
+            # new lap
+            self.lap_index = lap_count
 
-        running = (not paused) and (not loading) and (self._lap_index > 0)
+        running = (not paused) and (not loading) and (self.lap_index > 0)
 
         if running:
             self._lap_time_s += dt
@@ -258,50 +270,65 @@ class DeltaWidget(DirtySprite):
                         self._zs.append(vz)
                         self._times.append(self._lap_time_s)
 
-        if self._has_reference() and self._lap_index >= 2:
-            delta = None
-            if pos is not None:
-                delta = self._delta_vs_best_idw((pos.x, pos.z))
+        if self._has_lap_reference() and self.lap_index >= 2:
+            delta = self._current_vs_reference((pos.x, pos.z))
             if delta is not None:
-                self._delta_vis = (
-                    1 - self._delta_alpha
-                ) * self._delta_vis + self._delta_alpha * delta
-
-                self.feed.delta_s = self._delta_vis
-                self.feed.has_delta = True
-
-                self.set_delta(self._delta_vis)
+                self._delta_timer += dt
+                if (
+                    self._last_delta_value is None
+                    or self._delta_timer >= self.delta_update_period
+                ):
+                    self._last_delta_value = delta
+                    self._delta_timer = 0.0
+                    self.feed.delta_s = delta
+                    self.feed.has_delta = True
+                    self.set_delta(delta)
         else:
             self.set_delta()
+            self._delta_timer = 0.0
+            self._last_delta_value = None
 
-    def _delta_vs_best_idw(self, qpos: Tuple[float, float]) -> Optional[float]:
-        """Delta (current lap time - reference time) using k-NN + inverse-distance weights."""
-        if self._kdtree is None or self._best_times_np is None:
+    def _current_vs_reference(self, qpos: Tuple[float, float]) -> Optional[float]:
+        """Delta of current lap time - reference time at nearby reference positions.
+
+        Strategy:
+        =========
+
+        - Prefer neighbors within a fixed radius.
+        - Use median of up to 5 closest.
+        - EMA for frame-to-frame smoothness.
+        - If no trustworthy neighbors in frame, fall back to last trustworthy time.
+        """
+        if (
+            self._kdtree is None
+            or self._best_times_np is None
+            or self._best_times_np.size == 0
+        ):
             return None
-        n = int(self._best_times_np.size)
-        if n == 0:
-            return None
 
-        k = int(min(self.knn_k, n))
-        try:
-            dists, idxs = self._kdtree.query(qpos, k=k, workers=-1)
-        except TypeError:
-            dists, idxs = self._kdtree.query(qpos, k=k)
-
-        # Ensure 1D arrays even when k==1 (KDTree returns scalars in that case)
-        dists = np.atleast_1d(dists).astype(np.float32)
+        # find a few nearby candidates
+        dist, idxs = self._kdtree.query(
+            qpos, k=5, distance_upper_bound=self.max_nn_radius
+        )
         idxs = np.atleast_1d(idxs)
+        idxs = idxs[np.isfinite(dist)] if np.ndim(dist) else [idxs]
 
-        # If we have an exact match (dist==0), use its time directly to avoid huge weights
-        zero_mask = dists <= self.idw_eps
-        if np.any(zero_mask):
-            ref_time = float(np.mean(self._best_times_np[idxs[zero_mask]]))
+        if len(idxs) == 0:
+            return None
+
+        # enforce continuity: choose the nearest index close to last_ref_idx
+        if self._last_ref_idx is not None:
+            diffs = np.abs(idxs - self._last_ref_idx)
+            idx = (
+                int(idxs[np.argmin(diffs)])
+                if np.min(diffs) <= self._max_ref_jump
+                else int(idxs[0])
+            )
         else:
-            # Inverse-distance weights: w_i = 1 / d_i^p
-            w = 1.0 / np.power(dists + self.idw_eps, float(self.idw_power))
-            w /= w.sum()
-            ref_time = float(np.dot(w, self._best_times_np[idxs]))
+            idx = int(idxs[0])
 
+        self._last_ref_idx = idx
+        ref_time = float(self._best_times_np[idx])
         return float(self._lap_time_s - ref_time)
 
     def _build_reference_from_current(self) -> None:
@@ -318,7 +345,7 @@ class DeltaWidget(DirtySprite):
 
         self._kdtree = KDTree(self._best_pts_np, leafsize=self._kd_leafsize)
 
-    def _has_reference(self) -> bool:
+    def _has_lap_reference(self) -> bool:
         return (
             self._kdtree is not None
             and self._best_times_np is not None
@@ -326,15 +353,18 @@ class DeltaWidget(DirtySprite):
         )
 
     def reset(self) -> None:
+        self.logger.info("reset()")
         self.set_delta()
-        self._lap_index = -1
+        self.lap_index = -1
+
+        # reset relevant variables
         self._lap_time_s = 0.0
-        self._best_time_s = float("inf")
         self._xs.clear()
         self._zs.clear()
         self._times.clear()
         self._last_vx = None
         self._last_vz = None
+        self._best_time_s = float("inf")
         self._best_pts_np = None
         self._best_times_np = None
         self._kdtree = None

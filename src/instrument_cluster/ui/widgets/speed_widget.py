@@ -138,6 +138,12 @@ class SpeedWidget(DirtySprite):
             self.dirty = 1
 
     def update(self, packet: TelemetryFrame | None, dt: float):
-        v = int((getattr(packet, "car_speed", 0.0) or 0.0) * 3.6)
-        digits = f"{v:d}"
+        flags = getattr(packet, "flags", None)
+        car_on_track = bool(getattr(flags, "car_on_track", False))
+        if car_on_track:
+            v = int((getattr(packet, "car_speed", 0.0) or 0.0) * 3.6)
+            digits = f"{v:d}"
+        else:
+            digits = f"{0:d}"
+
         self.set_speed(digits)

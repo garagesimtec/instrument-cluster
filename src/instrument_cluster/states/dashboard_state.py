@@ -41,6 +41,7 @@ class DashboardState(State):
     ):
         super().__init__(state_manager)
         self.logger = Logger(__class__.__name__).get()
+
         # -----------------------------------------------
         # T E L E M E T R Y
         # -----------------------------------------------
@@ -126,8 +127,8 @@ class DashboardState(State):
         lastlap_widget = LapWidget(rect=(870, 440, 286, 92))
 
         feed = Feed()
-        predictedlap_widget = PredictedLapWidget(rect=(186, 162, 352, 92), feed=feed)
-        diff_widget = DeltaWidget(rect=(870, 340, 286, 92), feed=feed)
+        predictedlap_widget = PredictedLapWidget(rect=(186, 163, 352, 92), feed=feed)
+        diff_widget = DeltaWidget(rect=(870, 344, 286, 92), feed=feed)
 
         self.widgets.add(
             gear_widget,
@@ -185,8 +186,6 @@ class DashboardState(State):
 
     def update(self, dt: float):
         super().update(dt)
-
-        self._reconfigure_telemetry_if_needed()
 
         # get fresh telemetry frame once per tick
         packet = None

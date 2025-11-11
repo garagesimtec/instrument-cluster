@@ -160,14 +160,14 @@ class LapWidget(DirtySprite):
             self.dirty = 1
 
     def format_mm_ss_hh(self, seconds: float) -> str:
-        cs = max(0, int(seconds * 100 + 0.5))
+        cs = max(0, int(seconds * 100))
         m = cs // 6000
         s = (cs // 100) % 60
         hh = cs % 100
         return f"{m:02d}:{s:02d}.{hh:02d}"
 
     def reset(self) -> None:
-        self.set_lap()
+        self.set_lap(1.0)
 
     def update(self, packet: TelemetryFrame | None, dt: float):
         lap_count = packet.lap_count

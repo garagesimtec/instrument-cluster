@@ -18,7 +18,7 @@ def run(conf: Config) -> int:
     take_screenshot = False
 
     clock = pygame.time.Clock()
-    fps = 60
+    fps = 30
 
     while running:
         dt = clock.tick(fps) / 1000
