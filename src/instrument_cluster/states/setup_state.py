@@ -17,9 +17,13 @@ from ..ui.events import (
     BRIGHTNESS_UP_RELEASED,
     BUTTON_BACK_PRESSED,
     BUTTON_BACK_RELEASED,
+    TELEMETRY_MODE_PRESSED,
+    TELEMETRY_MODE_RELEASED,
+    TELEMETRY_MODE_SELECTED,
 )
 from ..ui.utils import FontFamily, load_font
 from ..ui.widgets.base.button import Button, ButtonEvents
+from ..ui.widgets.base.dropdown import Dropdown
 from ..ui.widgets.base.label import Label
 from ..ui.widgets.base.line import Line
 from .state import State
@@ -67,7 +71,7 @@ class SetupState(State):
             text=f"{self.brightness_percent_value} %",
             font=load_font(size=48, family=FontFamily.PIXEL_TYPE),
             color=Color.WHITE.rgb(),
-            pos=(464, SetupState.y + 15),
+            pos=(444, SetupState.y + 15),
             center=True,
         )
         self._error: Optional[str] = None
@@ -94,7 +98,7 @@ class SetupState(State):
             antialias=True,
         )
         self.plus_button = Button(
-            rect=(560, SetupState.y - 30, 80, 80),
+            rect=(520, SetupState.y - 30, 80, 80),
             text="+",
             icon="\ue145",
             icon_size=46,
@@ -107,6 +111,28 @@ class SetupState(State):
             font=load_font(size=76, family=FontFamily.PIXEL_TYPE),
             text_color=Color.WHITE.rgb(),
             antialias=True,
+        )
+
+        self.telemetry_label = Label(
+            text="Telemetry",
+            font=load_font(size=48, family=FontFamily.PIXEL_TYPE),
+            color=Color.WHITE.rgb(),
+            pos=(50, SetupState.y + 140),
+            center=False,
+        )
+        self._mode: Optional[TelemetryMode] = TelemetryMode(
+            ConfigManager.get_config().telemetry_mode
+        )
+        self.telemetry_mode_dropdown = Dropdown(
+            rect=(280, SetupState.y + 150 - 30, 320, 80),
+            options=SetupState.OPTIONS,
+            events=ButtonEvents(
+                pressed=TELEMETRY_MODE_PRESSED,
+                released=TELEMETRY_MODE_RELEASED,
+                selected=TELEMETRY_MODE_SELECTED,
+            ),
+            font=load_font(size=40, family=FontFamily.PIXEL_TYPE),
+            selected_index=SetupState.OPTIONS.index(self._mode),
         )
 
     def background_color(self):
@@ -124,6 +150,8 @@ class SetupState(State):
                 self.plus_button,
                 self.minus_button,
                 self.brightness_percent_label,
+                self.telemetry_label,
+                self.telemetry_mode_dropdown,
             ]
         )
 
@@ -149,6 +177,7 @@ class SetupState(State):
         self.back_button.handle_event(event)
         self.plus_button.handle_event(event)
         self.minus_button.handle_event(event)
+        self.telemetry_mode_dropdown.handle_event(event)
 
         if event.type == BUTTON_BACK_RELEASED:
             return self.on_back_released(event)
@@ -158,6 +187,26 @@ class SetupState(State):
         if event.type == BRIGHTNESS_UP_RELEASED:
             self.adjust_brightness(+SetupState.STEP_PERCENT)
             return True
+        if event.type in (TELEMETRY_MODE_PRESSED, TELEMETRY_MODE_RELEASED):
+            return True  # swallow so it doesn’t retrigger handle_event on the dropdown
+        if event.type == TELEMETRY_MODE_SELECTED:
+            if event.mode is TelemetryMode.UDP:
+                self._mode = TelemetryMode.UDP
+                from .enter_ip_state import EnterIPState
+
+                self.state_manager.change_state(
+                    EnterIPState(
+                        state_manager=self.state_manager,
+                        recent_connected=(
+                            ConfigManager.get_config().recent_connected or []
+                        ),
+                    )
+                )
+                return True
+            else:
+                ConfigManager.set_telemetry_mode(TelemetryMode.DEMO)
+                self._mode = TelemetryMode.DEMO
+                return True
         return False
 
     def update(self, dt):

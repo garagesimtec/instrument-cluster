@@ -27,6 +27,7 @@ class FontFamily(Enum):
     D_DIN_EXP_BOLD = ("d-din", "D-DINExp-Bold")
     D_DIN_EXP = ("d-din", "D-DINExp")
     D_DIN = ("d-din", "D-DIN")
+    NOTOSANS_REGULAR = ("noto_sans", "NotoSans-Regular")
 
     def __init__(self, subdir: str, basename: str):
         self.subdir = subdir  # folder under assets/fonts

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 
 import pygame
+from pygame.sprite import LayeredDirty, Sprite
 
 
 class Container:
@@ -95,3 +96,16 @@ class Container:
         for w in self._children:
             if hasattr(w, "update"):
                 w.update(dt)
+
+    def _iter_sprites(self):
+        for w in self._children:
+            if isinstance(w, Sprite):
+                yield w
+            elif isinstance(w, Container):
+                yield from w._iter_sprites()
+
+    def sprites(self):
+        return list(self._iter_sprites())
+
+    def add_to_layered(self, layered: LayeredDirty):
+        layered.add(*self.sprites())

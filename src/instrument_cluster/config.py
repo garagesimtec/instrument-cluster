@@ -14,6 +14,7 @@ class Config:
     width: int = field(default=1024)
     height: int = field(default=600)
     telemetry_mode: str = field(default=TelemetryMode.DEMO.value)
+    recent_connected: list[str] = field(default_factory=list)
     udp_host: str = field(default="127.0.0.1")
     udp_port: int = field(default=5600)
     brightness: int = 50
@@ -72,3 +73,17 @@ class ConfigManager:
         cfg = cls.get_config()
         cfg.brightness = brightness
         cfg.write_to_file(cls.path)
+
+    @classmethod
+    def last_connected(cls, ip_address: str) -> None:
+        config = cls.get_config()
+        if (
+            len(config.recent_connected) > 0
+            and config.recent_connected[0] == ip_address
+        ):
+            # already latest connected
+            return
+        if ip_address in config.recent_connected:
+            config.recent_connected.remove(ip_address)
+        config.recent_connected.insert(0, ip_address)
+        config.write_to_file(cls.path)

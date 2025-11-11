@@ -97,7 +97,7 @@ class DashboardState(State):
         gear_widget = GearWidget(
             rect=(
                 ConfigManager.get_config().width // 2,
-                400,
+                386,
                 186,
                 232,
             ),

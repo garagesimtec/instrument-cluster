@@ -40,6 +40,7 @@ class ButtonEvents:
     pressed: int
     released: int
     long_pressed: int | None = None
+    selected: int | None = None
 
 
 class AbstractButton(DirtySprite):
@@ -215,6 +216,9 @@ class ButtonGroup(Container):
 
     def extend_buttons(self, buttons: list[AbstractButton]) -> None:
         self.add(*buttons)
+
+    def sprites(self):
+        return super().sprites()
 
 
 class Button(AbstractButton):
