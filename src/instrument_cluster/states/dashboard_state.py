@@ -4,6 +4,7 @@ from pygame.sprite import LayeredDirty
 
 from ..backlight import Backlight
 from ..config import Config, ConfigManager
+from ..logger import Logger
 from ..states.setup_state import SetupState
 from ..states.state import State
 from ..states.state_manager import StateManager
@@ -39,7 +40,7 @@ class DashboardState(State):
         telemetry: Optional[TelemetryFrame] = None,
     ):
         super().__init__(state_manager)
-
+        self.logger = Logger(__class__.__name__).get()
         # -----------------------------------------------
         # T E L E M E T R Y
         # -----------------------------------------------
@@ -155,12 +156,21 @@ class DashboardState(State):
 
     def enter(self, screen):
         super().enter(screen)
-        try:
-            bl = Backlight()
-            if bl.available():
-                bl.set_percent(ConfigManager.get_config().brightness)
-        except Exception:
-            pass
+        self.telemetry.start()
+
+        bl = Backlight()
+        if bl.available():
+            bl.set_percent(ConfigManager.get_config().brightness)
+
+    def exit(self):
+        self.telemetry.stop()
+        super().exit()
+
+    def on_resume(self):
+        self._reconfigure_telemetry_if_needed()
+
+    def on_pause(self):
+        pass
 
     def draw(self, surface):
         # clear both groups against same background
@@ -175,6 +185,9 @@ class DashboardState(State):
 
     def update(self, dt: float):
         super().update(dt)
+
+        self._reconfigure_telemetry_if_needed()
+
         # get fresh telemetry frame once per tick
         packet = None
         try:
@@ -197,3 +210,28 @@ class DashboardState(State):
         if event.type == BUTTON_SETUP_LONGPRESSED:
             return True
         return False
+
+    def _reconfigure_telemetry_if_needed(self):
+        """Swap TelemetrySource if the persisted mode changed (e.g., DEMO <-> UDP)."""
+        cfg = ConfigManager.get_config()
+        desired_mode = TelemetryMode(cfg.telemetry_mode)
+
+        if desired_mode == self._last_mode:
+            return
+
+        try:
+            self.telemetry.stop()
+        except Exception:
+            pass
+
+        try:
+            self.telemetry = TelemetrySource(
+                mode=desired_mode,
+                host=cfg.udp_host,
+                port=cfg.udp_port,
+            )
+            self.telemetry.start()
+            self._last_mode = desired_mode
+            self.logger.info(f"Telemetry mode switched to {desired_mode.name}")
+        except Exception as e:
+            self.logger.error(f"Failed to switch telemetry to {desired_mode}: {e}")
