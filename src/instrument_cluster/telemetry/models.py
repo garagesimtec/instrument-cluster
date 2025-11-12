@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class Flags(BaseModel):
     paused: bool = False
     loading_or_processing: bool = False
-    car_on_track: bool = False
+    car_on_track: bool = True
     in_gear: bool = False  # 0 when shifting or out of gear, standing
     has_turbo: bool = False
     rev_limiter_alert_active: bool = False

@@ -139,16 +139,6 @@ class DeltaWidget(DirtySprite):
             if hasattr(self, "_ema_ref_time"):
                 delattr(self, "_ema_ref_time")
 
-        for attr in (
-            "_tref_spline",
-            "_seg_mid_kdtree",
-            "_ref_s",
-            "_ref_t",
-            "_lap_len_m",
-        ):
-            if hasattr(self, attr):
-                setattr(self, attr, None)
-
     def _get_digit_metrics(self, color: tuple[int, int, int]):
         # cache of digit atlases keyed by (font_id, antialias, color_rgb)
         if not hasattr(self, "_digit_cache"):
@@ -356,6 +346,7 @@ class DeltaWidget(DirtySprite):
         qz = float(qz)
         best_s = None
         best_d2 = float("inf")
+        best_idx = None
 
         for j in cand:
             px = self._seg_px[j]
@@ -377,13 +368,6 @@ class DeltaWidget(DirtySprite):
             fz = pz + t * dz
             d2 = (qx - fx) * (qx - fx) + (qz - fz) * (qz - fz)
 
-            if d2 < best_d2:
-                best_d2 = d2
-                best_s = float(self._seg_s0[j] + t * L)
-
-        best_s, best_d2, best_idx = None, float("inf"), None
-        for j in cand:
-            # ... project onto segment ...
             if d2 < best_d2:
                 best_d2 = d2
                 best_s = float(self._seg_s0[j] + t * L)
@@ -520,6 +504,13 @@ class DeltaWidget(DirtySprite):
         self._best_time_s = float("inf")
         self._best_pts_np = None
         self._best_times_np = None
+        self._last_s = None
+        self._last_seg_idx = None
+        self._disp_delta = None
+        self._anim_start = None
+        self._anim_target = None
+        self._anim_t = 0.0
+
         for attr in (
             "_tref_spline",
             "_seg_mid_kdtree",
@@ -533,7 +524,7 @@ class DeltaWidget(DirtySprite):
     def save_reference_plots(
         self,
         save_dir: str = ".",
-        also_plot_time_vs_distance: bool = True,
+        also_plot_time_vs_distance: bool = False,
     ) -> dict:
         """
         Save reference plots as PNGs.
