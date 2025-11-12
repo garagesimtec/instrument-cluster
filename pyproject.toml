@@ -9,6 +9,7 @@ description = "An Instrument Cluster"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "matplotlib>=3.10.7",
     "pydantic>=2.11.7",
     "pygame>=2.6.1",
     "scipy>=1.11.4",

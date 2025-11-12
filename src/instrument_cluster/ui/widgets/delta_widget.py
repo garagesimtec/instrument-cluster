@@ -1,10 +1,14 @@
 import math
+import os
+import time
 from array import array
 from typing import Optional, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pygame
 from pygame.sprite import DirtySprite
+from scipy.interpolate import PchipInterpolator
 from scipy.spatial import cKDTree as KDTree
 
 from ...logger import Logger
@@ -86,7 +90,6 @@ class DeltaWidget(DirtySprite):
         self._best_time_s: float = float("inf")
 
         # kd-tree
-        self._kdtree = None
         self._kd_leafsize = int(kd_leafsize)
         self._min_dist_m = 5.0  # 1–5 m
         self._min_dist_sq = self._min_dist_m * self._min_dist_m
@@ -100,15 +103,23 @@ class DeltaWidget(DirtySprite):
         self._best_pts_np = None
         self._best_times_np = None
 
-        self.max_nn_radius = 15
+        # delta easing
+        self._disp_delta = None
+        self._anim_start = None
+        self._anim_target = None
+        self._anim_t = 0.0
+        self.delta_anim_duration = 0.4  # seconds (0.5–1.0 works well)
+        self.delta_change_eps = 0.02  # s; ignore tiny target changes
 
-        # update delta every x seconds
-        self._delta_timer = 0.0
-        self._last_delta_value = None
-        self.delta_update_period = 0.15  # seconds
-        self._last_ref_idx = None
-        # max allowed index jump along the reference
-        self._max_ref_jump = 30
+        self._last_s = None
+        self._last_seg_idx = None
+        self.max_lateral_m = 12.0  # reject updates when car is too far from path
+        self.max_s_jump_m = 30.0  # cap how far s can jump in one frame
+        self.max_backtrack_m = 5.0  # allow tiny backtrack, clamp bigger ones
+
+        # prevent "teleport"
+        self._max_dist_m = 60.0  # tune: 40–80 m
+        self._max_dist_sq = self._max_dist_m * self._max_dist_m
 
     @property
     def lap_index(self):
@@ -127,6 +138,16 @@ class DeltaWidget(DirtySprite):
 
             if hasattr(self, "_ema_ref_time"):
                 delattr(self, "_ema_ref_time")
+
+        for attr in (
+            "_tref_spline",
+            "_seg_mid_kdtree",
+            "_ref_s",
+            "_ref_t",
+            "_lap_len_m",
+        ):
+            if hasattr(self, attr):
+                setattr(self, attr, None)
 
     def _get_digit_metrics(self, color: tuple[int, int, int]):
         # cache of digit atlases keyed by (font_id, antialias, color_rgb)
@@ -246,6 +267,9 @@ class DeltaWidget(DirtySprite):
                 self._build_reference_from_current()
                 self._best_time_s = min(self._best_time_s, prev_time)
 
+                # plot reference lap for debugging
+                # self.save_reference_plots()
+
             # new lap
             self.lap_index = lap_count
 
@@ -264,92 +288,221 @@ class DeltaWidget(DirtySprite):
                 else:
                     dx = vx - self._last_vx
                     dz = vz - self._last_vz
-                    if (dx * dx + dz * dz) >= self._min_dist_sq:
+                    d2 = dx * dx + dz * dz
+                    if d2 >= self._min_dist_sq and d2 <= self._max_dist_sq:
                         self._last_vx, self._last_vz = vx, vz
                         self._xs.append(vx)
                         self._zs.append(vz)
                         self._times.append(self._lap_time_s)
 
-        if self._has_lap_reference() and self.lap_index >= 2:
-            delta = self._current_vs_reference((pos.x, pos.z))
-            if delta is not None:
-                self._delta_timer += dt
-                if (
-                    self._last_delta_value is None
-                    or self._delta_timer >= self.delta_update_period
+        if self._has_lap_reference() and self.lap_index >= 2 and pos is not None:
+            raw_delta = self._current_vs_reference((pos.x, pos.z))
+            if raw_delta is not None:
+                # start a new animation if target moved meaningfully
+                if self._disp_delta is None:
+                    self._disp_delta = float(raw_delta)
+                    self._anim_target = float(raw_delta)
+                    self._anim_start = float(raw_delta)
+                    self._anim_t = 0.0
+                elif (
+                    abs(raw_delta - (self._anim_target or raw_delta))
+                    > self.delta_change_eps
                 ):
-                    self._last_delta_value = delta
-                    self._delta_timer = 0.0
-                    self.feed.delta_s = delta
-                    self.feed.has_delta = True
-                    self.set_delta(delta)
+                    self._anim_start = float(self._disp_delta)
+                    self._anim_target = float(raw_delta)
+                    self._anim_t = 0.0
+
+                # advance easing
+                self._anim_t = min(
+                    1.0, self._anim_t + (dt / max(1e-3, self.delta_anim_duration))
+                )
+                # cosine ease-in-out
+                s = 0.5 - 0.5 * math.cos(math.pi * self._anim_t)
+                self._disp_delta = self._anim_start + s * (
+                    self._anim_target - self._anim_start
+                )
+
+                # show smoothed value
+                self.feed.delta_s = self._disp_delta
+                self.feed.has_delta = True
+                self.set_delta(self._disp_delta)
         else:
+            # clear state on losing reference/new session
             self.set_delta()
-            self._delta_timer = 0.0
-            self._last_delta_value = None
+            self._disp_delta = None
+            self._anim_start = None
+            self._anim_target = None
+            self._anim_t = 0.0
 
-    def _current_vs_reference(self, qpos: Tuple[float, float]) -> Optional[float]:
-        """Delta of current lap time - reference time at nearby reference positions.
-
-        Strategy:
-        =========
-
-        - Prefer neighbors within a fixed radius.
-        - Use median of up to 5 closest.
-        - EMA for frame-to-frame smoothness.
-        - If no trustworthy neighbors in frame, fall back to last trustworthy time.
+    def _project_to_s(self, qx: float, qz: float) -> Optional[float]:
         """
-        if (
-            self._kdtree is None
-            or self._best_times_np is None
-            or self._best_times_np.size == 0
-        ):
+        Project (qx,qz) onto nearest path segment; return curvilinear s (meters).
+        """
+        if getattr(self, "_seg_mid_kdtree", None) is None:
             return None
 
-        # find a few nearby candidates
-        dist, idxs = self._kdtree.query(
-            qpos, k=5, distance_upper_bound=self.max_nn_radius
-        )
-        idxs = np.atleast_1d(idxs)
-        idxs = idxs[np.isfinite(dist)] if np.ndim(dist) else [idxs]
+        # pick nearest segment by midpoint
+        dist, idx = self._seg_mid_kdtree.query((qx, qz), k=1)
+        i = int(idx)
 
-        if len(idxs) == 0:
+        # check neighbors i-1 and i+1 for safety
+        cand = [i]
+        if i > 0:
+            cand.append(i - 1)
+        if i + 1 < self._seg_px.shape[0]:
+            cand.append(i + 1)
+
+        qx = float(qx)
+        qz = float(qz)
+        best_s = None
+        best_d2 = float("inf")
+
+        for j in cand:
+            px = self._seg_px[j]
+            pz = self._seg_pz[j]
+            dx = self._seg_dx[j]
+            dz = self._seg_dz[j]
+            L = self._seg_L[j]
+            if L <= 1e-6:
+                continue
+
+            # project onto segment, clamp t to [0,1]
+            vx = qx - px
+            vz = qz - pz
+            t = (vx * dx + vz * dz) / (L * L)
+            t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+
+            # foot point & distance
+            fx = px + t * dx
+            fz = pz + t * dz
+            d2 = (qx - fx) * (qx - fx) + (qz - fz) * (qz - fz)
+
+            if d2 < best_d2:
+                best_d2 = d2
+                best_s = float(self._seg_s0[j] + t * L)
+
+        best_s, best_d2, best_idx = None, float("inf"), None
+        for j in cand:
+            # ... project onto segment ...
+            if d2 < best_d2:
+                best_d2 = d2
+                best_s = float(self._seg_s0[j] + t * L)
+                best_idx = j
+        if best_s is None:
             return None
-
-        # enforce continuity: choose the nearest index close to last_ref_idx
-        if self._last_ref_idx is not None:
-            diffs = np.abs(idxs - self._last_ref_idx)
-            idx = (
-                int(idxs[np.argmin(diffs)])
-                if np.min(diffs) <= self._max_ref_jump
-                else int(idxs[0])
-            )
-        else:
-            idx = int(idxs[0])
-
-        self._last_ref_idx = idx
-        ref_time = float(self._best_times_np[idx])
-        return float(self._lap_time_s - ref_time)
+        return best_s, math.sqrt(best_d2), best_idx
 
     def _build_reference_from_current(self) -> None:
         n = len(self._xs)
-        if n == 0:
+        if n < 2:
             return
 
+        # 2D path as numpy
         xs = np.frombuffer(self._xs, dtype=np.float32, count=n).copy()
         zs = np.frombuffer(self._zs, dtype=np.float32, count=n).copy()
         ts = np.frombuffer(self._times, dtype=np.float32, count=n).copy()
 
-        self._best_pts_np = np.column_stack((xs, zs))  # (N, 2)
+        # cumulative distance s along the lap (meters)
+        dx = np.diff(xs)
+        dz = np.diff(zs)
+        seg_len = np.hypot(dx, dz)
+        s = np.concatenate(([0.0], np.cumsum(seg_len)))
+
+        # Drop zero-length segments to keep s strictly increasing
+        keep = np.concatenate(([True], seg_len > 1e-3))
+        xs, zs, ts, s = xs[keep], zs[keep], ts[keep], s[keep]
+
+        # Store reference lookups
+        self._ref_s = s.astype(np.float32)  # shape (M,)
+        self._ref_t = ts.astype(np.float32)  # shape (M,)
+        self._lap_len_m = float(self._ref_s[-1])  # total lap length (meters)
+
+        #
+        # for monotone behavior use
+        #
+        # from scipy.interpolate import PchipInterpolator
+        #
+        # and
+        #
+        # PchipInterpolator(self._ref_s, self._ref_t, extrapolate=True)
+        #
+
+        # self._tref_spline = CubicSpline(
+        #     self._ref_s, self._ref_t, bc_type="natural", extrapolate=True
+        # )
+
+        self._tref_spline = PchipInterpolator(
+            self._ref_s, self._ref_t, extrapolate=True
+        )
+
+        # Precompute segment data + KDTree of segment midpoints
+        px = xs[:-1]
+        pz = zs[:-1]  # segment start points
+        dx = np.diff(xs)
+        dz = np.diff(zs)  # segment vectors
+        L = np.hypot(dx, dz)
+        valid = L > 1e-6
+        self._seg_px = px[valid]
+        self._seg_pz = pz[valid]
+        self._seg_dx = dx[valid]
+        self._seg_dz = dz[valid]
+        self._seg_L = L[valid]
+        self._seg_s0 = self._ref_s[:-1][valid]  # s at segment start
+        mids = np.column_stack(
+            (self._seg_px + 0.5 * self._seg_dx, self._seg_pz + 0.5 * self._seg_dz)
+        )
+        self._seg_mid_kdtree = KDTree(mids, leafsize=self._kd_leafsize)
+
+        # Keep original (x,z,t) too if you want, but KDTree on points is no longer required
+        self._best_pts_np = np.column_stack((xs, zs))
         self._best_times_np = ts
 
-        self._kdtree = KDTree(self._best_pts_np, leafsize=self._kd_leafsize)
+    def _current_vs_reference(self, qpos: Tuple[float, float]) -> Optional[float]:
+        if not hasattr(self, "_ref_s") or self._ref_s is None or self._ref_s.size < 2:
+            return None
+
+        proj = self._project_to_s(qpos[0], qpos[1])
+        if proj is None:
+            return None
+        s_raw, d_perp, seg_idx = proj
+
+        # 1) reject clearly off-track projections for this frame
+        if d_perp > self.max_lateral_m:
+            # keep last s (freeze), if we have one; else drop the update
+            if self._last_s is None:
+                return None
+            s = self._last_s
+        else:
+            s = s_raw
+
+        # 2) clamp s to lap domain
+        lap_len = getattr(self, "_lap_len_m", float(self._ref_s[-1]))
+        s = min(max(0.0, s), lap_len)
+
+        # 3) continuity clamps vs last s
+        if self._last_s is not None:
+            ds = s - self._last_s
+            # cap forward/backward jump size
+            if ds > self.max_s_jump_m:
+                s = self._last_s + self.max_s_jump_m
+            elif ds < -self.max_backtrack_m:
+                s = self._last_s - self.max_backtrack_m
+
+        # commit state
+        self._last_s = s
+        self._last_seg_idx = seg_idx
+
+        # 4) get reference time and compute delta
+        t_ref = float(self._tref_spline(s))  # or np.interp(...)
+        return float(self._lap_time_s - t_ref)
 
     def _has_lap_reference(self) -> bool:
         return (
-            self._kdtree is not None
-            and self._best_times_np is not None
-            and self._best_times_np.size > 0
+            getattr(self, "_ref_s", None) is not None
+            and getattr(self, "_ref_t", None) is not None
+            and self._ref_s.size >= 2
+            and getattr(self, "_tref_spline", None) is not None
+            and getattr(self, "_seg_mid_kdtree", None) is not None
         )
 
     def reset(self) -> None:
@@ -367,4 +520,80 @@ class DeltaWidget(DirtySprite):
         self._best_time_s = float("inf")
         self._best_pts_np = None
         self._best_times_np = None
-        self._kdtree = None
+        for attr in (
+            "_tref_spline",
+            "_seg_mid_kdtree",
+            "_ref_s",
+            "_ref_t",
+            "_lap_len_m",
+        ):
+            if hasattr(self, attr):
+                setattr(self, attr, None)
+
+    def save_reference_plots(
+        self,
+        save_dir: str = ".",
+        also_plot_time_vs_distance: bool = True,
+    ) -> dict:
+        """
+        Save reference plots as PNGs.
+        Returns dict with file paths. Requires a built reference.
+        """
+
+        if getattr(self, "_best_pts_np", None) is None or self._best_pts_np.size == 0:
+            raise RuntimeError("No reference path available. Build it first.")
+
+        # Gather metadata
+        lap_idx = int(getattr(self, "_lap_index", -1))
+        n_pts = int(self._best_pts_np.shape[0])
+        lap_len_m = float(getattr(self, "_lap_len_m", 0.0) or 0.0)
+        ref_time_s = float(getattr(self, "_best_time_s", float("nan")))
+        ts = time.strftime("%Y%m%d-%H%M%S")
+
+        base = (
+            f"ref_lap{lap_idx}_len{int(round(lap_len_m))}m_"
+            f"pts{n_pts}_t{ref_time_s:.3f}s_{ts}"
+        )
+
+        os.makedirs(save_dir, exist_ok=True)
+        paths = {}
+
+        # --- Plot XY path ---
+        xs = self._best_pts_np[:, 0]
+        zs = self._best_pts_np[:, 1]
+
+        fig, ax = plt.subplots(dpi=150)
+        ax.plot(xs, zs)
+        ax.scatter([xs[0]], [zs[0]])  # start/finish marker
+        ax.set_aspect("equal")
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("z [m]")
+        ax.set_title("Reference Path (x vs z)")
+
+        out_xy = os.path.join(save_dir, f"{base}_path.png")
+        fig.savefig(out_xy, bbox_inches="tight")
+        plt.close(fig)
+        paths["path_png"] = out_xy
+
+        # --- Optional: t(s) ---
+        if also_plot_time_vs_distance:
+            if (
+                getattr(self, "_ref_s", None) is None
+                or getattr(self, "_ref_t", None) is None
+            ):
+                raise RuntimeError(
+                    "No reference time/distance arrays. Build reference first."
+                )
+
+            fig2, ax2 = plt.subplots(dpi=150)
+            ax2.plot(self._ref_s, self._ref_t)
+            ax2.set_xlabel("distance s [m]")
+            ax2.set_ylabel("reference time t [s]")
+            ax2.set_title("Reference Time vs Distance")
+
+            out_ts = os.path.join(save_dir, f"{base}_t_vs_s.png")
+            fig2.savefig(out_ts, bbox_inches="tight")
+            plt.close(fig2)
+            paths["t_vs_s_png"] = out_ts
+
+        return paths
