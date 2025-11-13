@@ -24,7 +24,7 @@ class GearWidget(DirtySprite):
         border_width: int = 2,
         border_radius: int = 4,
         show_border: bool = True,
-        header_margin: int = 6,  # brings `header_text` down by x pixels
+        header_margin: int = 0,  # brings `header_text` down by x pixels
         antialias: bool = True,
     ):
         super().__init__()
@@ -41,7 +41,7 @@ class GearWidget(DirtySprite):
             raise ValueError(f"Unsupported anchor: {anchor}")
 
         self.font_header = load_font(size=32, family=FontFamily.PIXEL_TYPE)
-        self.font_value = load_font(size=240, family=FontFamily.D_DIN_EXP_BOLD)
+        self.font_value = load_font(size=254, family=FontFamily.D_DIN_EXP_BOLD)
         self.header_text = header_text
         self.value_offset_y = 4
         self.bg_color = bg_color

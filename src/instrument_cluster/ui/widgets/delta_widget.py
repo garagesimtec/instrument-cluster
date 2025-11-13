@@ -125,6 +125,10 @@ class DeltaWidget(DirtySprite):
             self._lap_index = value
             # reset per-lap capture only (do NOT clear the built reference here)
             self._lap_time_s = 0.0
+
+            self.logger.info(f"lap={value}")
+            self.logger.info(f"self._lap_time_s = {self._lap_time_s}")
+
             self._xs.clear()
             self._zs.clear()
             self._times.clear()
@@ -522,6 +526,6 @@ class DeltaWidget(DirtySprite):
         )
 
     def reset(self) -> None:
-        self.logger.info("reset()")
         self.set_delta()
         self.lap_index = -1
+        self.logger.info("reset()")

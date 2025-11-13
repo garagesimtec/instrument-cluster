@@ -23,7 +23,7 @@ class SpeedWidget(DirtySprite):
         border_color: tuple[int, int, int] = Color.LIGHT_GREY.rgb(),
         border_width: int = 2,
         border_radius: int = 4,
-        show_border: bool = False,
+        show_border: bool = True,
         header_margin: int = 10,  # brings `header_text` down by x pixels
         antialias: bool = True,
     ):

@@ -96,39 +96,16 @@ class DashboardState(State):
 
         self.ui.add(self.setup)
 
-        gear_widget = GearWidget(
-            rect=(
-                ConfigManager.get_config().width // 2,
-                386,
-                186,
-                232,
-            ),
-            show_border=False,
-        )
+        width = ConfigManager.get_config().width
 
-        speed_widget = SpeedWidget(
-            rect=(
-                ConfigManager.get_config().width // 2,
-                100,
-                220,
-                160,
-            )
-        )
-
-        bestlap_widget = BestLapWidget(
-            rect=(
-                186,
-                68,
-                352,
-                92,
-            )
-        )
-
+        gear_widget = GearWidget(rect=(width // 2, 388, 186, 232), show_border=False)
+        speed_widget = SpeedWidget(rect=(width // 2, 100, 220, 160), show_border=False)
+        bestlap_widget = BestLapWidget(rect=(186, 68, 352, 92))
         lastlap_widget = LapWidget(rect=(870, 440, 286, 92))
 
         feed = Feed()
         predictedlap_widget = PredictedLapWidget(rect=(186, 163, 352, 92), feed=feed)
-        diff_widget = DeltaWidget(rect=(870, 344, 286, 92), feed=feed)
+        delta_widget = DeltaWidget(rect=(870, 344, 286, 92), feed=feed)
 
         self.widgets.add(
             gear_widget,
@@ -136,7 +113,7 @@ class DashboardState(State):
             bestlap_widget,
             predictedlap_widget,
             lastlap_widget,
-            diff_widget,
+            delta_widget,
         )
 
     def background_color(self):
@@ -146,7 +123,6 @@ class DashboardState(State):
         pass
 
     def create_group(self):
-        # keep for compatibility if something else relies on .group
         # combine layers: widgets under UI
         self.group = LayeredDirty()
         for spr in self.widgets.sprites():
@@ -174,7 +150,6 @@ class DashboardState(State):
         pass
 
     def draw(self, surface):
-        # clear both groups against same background
         self.widgets.clear(surface, self.background)
         self.ui.clear(surface, self.background)
 
