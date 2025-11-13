@@ -9,7 +9,7 @@ from ..colors import Color
 from ..utils import FontFamily, load_font
 
 
-class PredictedLapWidget(DirtySprite):
+class PredictedLapTimeWidget(DirtySprite):
     """
     Bordered panel with a header text and a centered dynamic value underneath.
     Redraws only when the dynamic value changes.
@@ -182,9 +182,8 @@ class PredictedLapWidget(DirtySprite):
             return
 
         if not (packet.last_lap_time == 0 or packet.last_lap_time is None):
-            last_lap_time = float(packet.last_lap_time * 1e-3)
-            delta = self.feed.delta_s if self.feed.has_delta else 0.0
-
-            predicted_lap_time = last_lap_time + delta
-
-            self.set_lap(predicted_lap_time)
+            if self.feed.has_delta:
+                delta = self.feed.delta_s
+                last_lap_time = float(packet.last_lap_time * 1e-3)
+                predicted_lap_time = last_lap_time + delta
+                self.set_lap(predicted_lap_time)

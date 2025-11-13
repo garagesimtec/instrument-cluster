@@ -13,6 +13,8 @@ class Label(DirtySprite):
         pos: tuple[int, int] = (0, 0),
         center: bool = True,
         antialias: bool = True,
+        *,
+        visible=True,
     ):
         super().__init__()
         self._text = None
@@ -23,7 +25,7 @@ class Label(DirtySprite):
         self.antialias = antialias
         self.set_text(text)
         self.dirty = 1  # ensures initial draw
-        self.visible = 1  # sprite will be drawn
+        self.visible = visible  # sprite will be drawn
 
     @property
     def text(self):

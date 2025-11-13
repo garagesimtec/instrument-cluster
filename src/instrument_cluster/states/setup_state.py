@@ -9,7 +9,11 @@ from ..config import ConfigManager
 from ..states.state_manager import StateManager
 from ..telemetry.mode import TelemetryMode
 from ..ui.colors import Color
-from ..ui.constants import HEADER_TITLE_TOPLEFT
+from ..ui.constants import (
+    HEADER_BACKBUTTON_POSITION,
+    HEADER_BACKBUTTON_SIZE,
+    HEADER_TITLE_TOPLEFT,
+)
 from ..ui.events import (
     BRIGHTNESS_DOWN_PRESSED,
     BRIGHTNESS_DOWN_RELEASED,
@@ -45,7 +49,7 @@ class SetupState(State):
             center=False,
         )
         self.back_button = Button(
-            rect=(ConfigManager.get_config().width - 90, 10, 70, 70),
+            rect=(*HEADER_BACKBUTTON_POSITION, *HEADER_BACKBUTTON_SIZE),
             text="x",
             text_color=Color.WHITE.rgb(),
             text_gap=0,
@@ -58,7 +62,7 @@ class SetupState(State):
             antialias=True,
             icon="\ue166",
             icon_color=Color.WHITE.rgb(),
-            icon_size=46,
+            icon_size=54,
             icon_position="center",
             icon_gap=0,
         )

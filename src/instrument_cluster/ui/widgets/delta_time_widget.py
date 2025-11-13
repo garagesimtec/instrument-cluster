@@ -12,7 +12,7 @@ from ..colors import Color
 from ..utils import FontFamily, load_font
 
 
-class DeltaWidget(DirtySprite):
+class DeltaTimeWidget(DirtySprite):
     """
     Bordered panel with a header text and a centered dynamic value underneath.
     Redraws only when the dynamic value changes.
@@ -286,7 +286,7 @@ class DeltaWidget(DirtySprite):
                         self._zs.append(vz)
                         self._times.append(self._lap_time_s)
 
-        if self._has_lap_reference() and self.lap_index >= 2 and pos is not None:
+        if self._has_lap_reference() and self.lap_index >= 3 and pos is not None:
             raw_delta = self._current_vs_reference((pos.x, pos.z))
             if raw_delta is not None:
                 # start a new animation if target moved meaningfully

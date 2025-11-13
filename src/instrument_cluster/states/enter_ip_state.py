@@ -9,7 +9,20 @@ from ..ip4 import get_ip_prefill
 from ..states.enter_url_state import EnterURLState
 from ..states.state_manager import StateManager
 from ..ui.colors import Color
-from ..ui.constants import HEADER_TITLE_TOPLEFT
+from ..ui.constants import (
+    BUTTON_DIMENSIONS,
+    BUTTON_GRID_OFFSET,
+    BUTTONS_PER_ROW,
+    HEADER_BACKBUTTON_POSITION,
+    HEADER_BACKBUTTON_SIZE,
+    HEADER_TITLE_TOPLEFT,
+    NUMPAD_OFFSET,
+    RECENT_BUTTONS_DIMENSIONS,
+    RECENT_BUTTONS_GRID_OFFSET,
+    RECENT_BUTTONS_OFFSET,
+    RECENT_BUTTONS_PER_ROW,
+    RECENT_CONNECTIONS_POSITION,
+)
 from ..ui.events import (
     BUTTON_BACK_PRESSED,
     BUTTON_BACK_RELEASED,
@@ -33,24 +46,6 @@ from .state import State
 if TYPE_CHECKING:
     pass
 
-BUTTONS_PER_ROW = 3
-BUTTON_DIMENSIONS = (114, 78)
-BUTTON_MARGIN = 7
-BUTTON_GRID_OFFSET = (
-    BUTTON_DIMENSIONS[0] + BUTTON_MARGIN,
-    BUTTON_DIMENSIONS[1] + BUTTON_MARGIN,
-)
-NUMPAD_OFFSET = (62, 228)
-
-RECENT_BUTTONS_PER_ROW = 1
-RECENT_BUTTONS_DIMENSIONS = (260, 70)
-RECENT_BUTTONS_MARGIN = 7
-RECENT_BUTTONS_GRID_OFFSET = (
-    RECENT_BUTTONS_DIMENSIONS[0] + RECENT_BUTTONS_MARGIN,
-    RECENT_BUTTONS_DIMENSIONS[1] + RECENT_BUTTONS_MARGIN,
-)
-RECENT_BUTTONS_OFFSET = (680, 210)
-
 
 class EnterIPState(State):
     def __init__(
@@ -65,7 +60,7 @@ class EnterIPState(State):
         labels = list("123456789#0.")
 
         back_button = Button(
-            rect=(ConfigManager.get_config().width - 90, 10, 70, 70),
+            rect=(*HEADER_BACKBUTTON_POSITION, *HEADER_BACKBUTTON_SIZE),
             text="x",
             text_visible=False,
             text_gap=0,
@@ -75,6 +70,11 @@ class EnterIPState(State):
             ),
             font=load_font(size=50, family=FontFamily.PIXEL_TYPE),
             antialias=True,
+            icon="\ue5cd",
+            icon_color=Color.WHITE.rgb(),
+            icon_size=50,
+            icon_position="center",
+            icon_gap=0,
         )
         del_button = Button(
             rect=(416, 142, 110, 76),
@@ -158,10 +158,12 @@ class EnterIPState(State):
 
         self.recent_label = Label(
             text="Recent connections",
-            font=load_font(size=42, family=FontFamily.PIXEL_TYPE),
+            font=load_font(size=46, family=FontFamily.PIXEL_TYPE),
             color=Color.WHITE.rgb(),
-            pos=(810, 180),
+            pos=RECENT_CONNECTIONS_POSITION,
             center=True,
+            antialias=False,
+            visible=len(ConfigManager.get_config().recent_connected) > 0,
         )
         self.textfield = TextField(
             text=get_ip_prefill(),

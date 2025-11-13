@@ -1,10 +1,9 @@
-from typing import Optional
-
 import pygame
 from pygame.sprite import DirtySprite
 
 from ...telemetry.models import TelemetryFrame
 from ..colors import Color
+from ..constants import LAP_WIDGET_OFFSET_Y
 from ..utils import FontFamily, load_font
 
 
@@ -18,8 +17,8 @@ class LapWidget(DirtySprite):
         self,
         rect: tuple[int, int, int, int],
         *,
-        anchor: str = "center",  # "topleft" or "center"
-        header_text: str = "Lap   Time",
+        anchor: str = "topleft",  # "topleft" or "center"
+        header_text: str = "Lap",
         bg_color: tuple[int, int, int] = Color.BLACK.rgb(),
         text_color: tuple[int, int, int] = Color.WHITE.rgb(),
         border_color: tuple[int, int, int] = Color.LIGHT_GREY.rgb(),
@@ -43,7 +42,7 @@ class LapWidget(DirtySprite):
             raise ValueError(f"Unsupported anchor: {anchor}")
 
         self.font_header = load_font(size=32, family=FontFamily.PIXEL_TYPE)
-        self.font_value = load_font(size=64, family=FontFamily.D_DIN_EXP)
+        self.font_value = load_font(size=46, family=FontFamily.D_DIN_EXP_BOLD)
         self.header_text = header_text
         self.value_offset_y = 4
         self.bg_color = bg_color
@@ -55,45 +54,14 @@ class LapWidget(DirtySprite):
         self.header_margin = header_margin
         self.antialias = antialias
 
-        self.digit_gap = -2
-        self._digit_key = None  # tracks cache validity
-
         self.image = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
         self.rect = self.image.get_rect(topleft=(tlx, tly))
 
-        self._last_time_str = None
+        self._last_lap_str = None
         self._render_border_and_header()  # border and header are static
-        self.set_lap(0.0)  # initial placeholder
+        self.set_current_lap(-1)  # initial placeholder
         self.visible = 1
         self.dirty = 2
-
-    def _ensure_digit_cache(self):
-        key = (id(self.font_value), self.text_color, self.antialias)
-        if key == self._digit_key:
-            return
-
-        chars = ".:0123456789"
-        self._digit_surf = {
-            ch: self.font_value.render(ch, self.antialias, self.text_color)
-            for ch in chars
-        }
-        self._digit_h = max(s.get_height() for s in self._digit_surf.values())
-        self._advance = max(s.get_width() for s in self._digit_surf.values())
-
-        # here we need a per-char slot width
-        # digits will have full slot but punctuation a narrower
-        punct_scale = 0.6  # tweak 0.35–0.6 to taste
-        self._adv = {}
-        for ch in chars:
-            if ch in ".:":
-                slot = int(
-                    max(self._digit_surf[ch].get_width(), self._advance * punct_scale)
-                )
-            else:
-                slot = self._advance
-            self._adv[ch] = slot
-
-        self._digit_key = key
 
     def _render_border_and_header(self):
         self.image.fill(self.bg_color)
@@ -117,66 +85,41 @@ class LapWidget(DirtySprite):
         # store header bottom to position value nicely later
         self._header_bottom = header_rect.bottom
 
-    def _render_value(self, speed_str: str):
-        self._ensure_digit_cache()
-
-        # compute value area
+    def _render_value(self, gear_str: str):
         inner_left = self.border_width
         inner_right = self.w - self.border_width
         inner_top = max(self._header_bottom + self.header_margin, self.border_width)
         inner_bottom = self.h - self.border_width
-        area = pygame.Rect(
-            inner_left, inner_top, inner_right - inner_left, inner_bottom - inner_top
+
+        value_area = pygame.Rect(
+            inner_left,
+            inner_top,
+            inner_right - inner_left,
+            inner_bottom - inner_top,
         )
 
-        pygame.draw.rect(self.image, self.bg_color, area)
+        pygame.draw.rect(self.image, self.bg_color, value_area)
 
-        # NEW: total width from per-char advances
-        advances = [self._adv.get(ch, self._advance) for ch in speed_str]
-        total_w = sum(advances) + max(0, len(speed_str) - 1) * self.digit_gap
+        value_surf = self.font_value.render(gear_str, self.antialias, self.text_color)
+        value_rect = value_surf.get_rect(
+            center=(self.w // 2, (self.h // 2) + LAP_WIDGET_OFFSET_Y)
+        )
 
-        x = area.centerx - total_w // 2
-        y = area.centery - self.value_offset_y - self._digit_h // 2
+        self.image.blit(value_surf, value_rect)
 
-        for i, ch in enumerate(speed_str):
-            slot_w = advances[i]
-            surf = self._digit_surf.get(ch)
-            if surf is None:
-                surf = self.font_value.render(ch, self.antialias, self.text_color)
+    def set_current_lap(self, lap: int):
+        lap_str = str(lap)
 
-            # center glyph inside its (possibly narrower) slot
-            gx = x + (slot_w - surf.get_width()) // 2
-            gy = y + (self._digit_h - surf.get_height()) // 2
-            self.image.blit(surf, (gx, gy))
-
-            x += slot_w + self.digit_gap
-
-    def set_lap(self, time: Optional[float] = None):
-        time_str = self.format_mm_ss_hh(time) if time is not None else ""
-
-        if time_str != self._last_time_str:
-            self._last_time_str = time_str
-            self._render_value(time_str)
+        if lap_str != self._last_lap_str:
+            self._last_lap_str = lap_str
+            self._render_value(lap_str)
             self.dirty = 1
 
-    def format_mm_ss_hh(self, seconds: float) -> str:
-        cs = max(0, int(seconds * 100))
-        m = cs // 6000
-        s = (cs // 100) % 60
-        hh = cs % 100
-        return f"{m:02d}:{s:02d}.{hh:02d}"
-
-    def reset(self) -> None:
-        self.set_lap(1.0)
-
     def update(self, packet: TelemetryFrame | None, dt: float):
-        lap_count = packet.lap_count
-
-        if lap_count == 0 or lap_count is None:
-            self.reset()
-            return
-
-        if not (packet.last_lap_time == 0 or packet.last_lap_time is None):
-            last_lap_time = float(packet.last_lap_time * 1e-3)
-
-            self.set_lap(last_lap_time)
+        flags = getattr(packet, "flags", None)
+        car_on_track = bool(getattr(flags, "car_on_track", False))
+        if car_on_track:
+            lap = int(getattr(packet, "lap_count", 0) or 0)
+        else:
+            lap = 0
+        self.set_current_lap(lap)

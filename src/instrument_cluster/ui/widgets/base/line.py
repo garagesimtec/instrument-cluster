@@ -1,12 +1,13 @@
 import pygame
 
 from ...colors import Color
+from ...constants import HEADER_LINE_TOPLEFT
 
 
 class Line:
     def __init__(
         self,
-        start_pos=(0, 90),
+        start_pos=HEADER_LINE_TOPLEFT,
         length=1024,
         color=Color.BLUE.rgb(),
         width=2,

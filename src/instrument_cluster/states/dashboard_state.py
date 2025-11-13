@@ -17,6 +17,7 @@ from ..ui.constants import (
     BUTTON_HEIGHT,
     FOOTER_BUTTONGROUP_MARGIN,
     FOOTER_BUTTONGROUP_X,
+    FOOTER_BUTTONGROUP_Y,
 )
 from ..ui.events import (
     BUTTON_SETUP_LONGPRESSED,
@@ -25,11 +26,12 @@ from ..ui.events import (
 )
 from ..ui.utils import FontFamily, load_font
 from ..ui.widgets.base.button import Button, ButtonEvents
-from ..ui.widgets.bestlap_widget import BestLapWidget
-from ..ui.widgets.delta_widget import DeltaWidget
+from ..ui.widgets.delta_time_widget import DeltaTimeWidget
+from ..ui.widgets.fastest_lap_time_widget import FastestLapTimeWidget
 from ..ui.widgets.gear_widget import GearWidget
+from ..ui.widgets.lap_time_widget import LapTimeWidget
 from ..ui.widgets.lap_widget import LapWidget
-from ..ui.widgets.predictedlap_widget import PredictedLapWidget
+from ..ui.widgets.predicted_lap_time_widget import PredictedLapTimeWidget
 from ..ui.widgets.speed_widget import SpeedWidget
 
 
@@ -66,10 +68,8 @@ class DashboardState(State):
         self.setup = Button(
             rect=(
                 FOOTER_BUTTONGROUP_X,
-                ConfigManager.get_config().height
-                - BUTTON_HEIGHT
-                - FOOTER_BUTTONGROUP_MARGIN,
-                100,
+                FOOTER_BUTTONGROUP_Y,
+                110,
                 BUTTON_HEIGHT,
             ),
             text="Setup",
@@ -90,7 +90,7 @@ class DashboardState(State):
             icon_position="center",
             icon_gap=0,
             content_align="center",
-            padding=(0, 6, 0, 0),  # 6 px gap to the upper border
+            padding=(0, 8, 0, 0),  # 8 px gap to the upper border
             icon_cell_width=34,
         )
 
@@ -100,12 +100,23 @@ class DashboardState(State):
 
         gear_widget = GearWidget(rect=(width // 2, 388, 186, 232), show_border=False)
         speed_widget = SpeedWidget(rect=(width // 2, 100, 220, 160), show_border=False)
-        bestlap_widget = BestLapWidget(rect=(186, 68, 352, 92))
-        lastlap_widget = LapWidget(rect=(870, 440, 286, 92))
+        lap_widget = LapWidget(
+            rect=(
+                922,
+                FOOTER_BUTTONGROUP_Y - FOOTER_BUTTONGROUP_MARGIN,
+                90,
+                BUTTON_HEIGHT + FOOTER_BUTTONGROUP_MARGIN,
+            ),
+            show_border=True,
+        )
+        bestlap_widget = FastestLapTimeWidget(rect=(186, 68, 352, 92))
+        lastlap_widget = LapTimeWidget(rect=(870, 440, 286, 92))
 
         feed = Feed()
-        predictedlap_widget = PredictedLapWidget(rect=(186, 163, 352, 92), feed=feed)
-        delta_widget = DeltaWidget(rect=(870, 344, 286, 92), feed=feed)
+        predictedlap_widget = PredictedLapTimeWidget(
+            rect=(186, 163, 352, 92), feed=feed
+        )
+        delta_widget = DeltaTimeWidget(rect=(870, 344, 286, 92), feed=feed)
 
         self.widgets.add(
             gear_widget,
@@ -114,6 +125,7 @@ class DashboardState(State):
             predictedlap_widget,
             lastlap_widget,
             delta_widget,
+            lap_widget,
         )
 
     def background_color(self):
