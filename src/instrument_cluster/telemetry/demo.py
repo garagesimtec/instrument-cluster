@@ -52,9 +52,9 @@ class DemoReader:
             throttle=max(0.0, math.sin(t) * 0.5 + 0.5),
             brake=max(0.0, math.sin(t + 1.8) * -0.4),
             steering=math.sin(t / 2.0) * 0.3,
-            lap_count=1,
+            lap_count=2,
             best_lap_time=97980,  # 0 + int((1000 * t)),
-            last_lap_time=1000,
+            last_lap_time=0,
             flags=flags,
             wheels=wheels,
         )

@@ -1,5 +1,13 @@
 from ..config import ConfigManager
 
+# ------------------------
+#  LAP
+# ------------------------
+LAP_DEFAULT_VALUE = 0.0
+
+# ------------------------
+# UI
+# ------------------------
 SCREEN_WIDTH = ConfigManager.get_config().width
 SCREEN_HEIGHT = ConfigManager.get_config().height
 

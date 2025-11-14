@@ -5,6 +5,7 @@ from pygame.sprite import DirtySprite
 
 from ...telemetry.models import TelemetryFrame
 from ..colors import Color
+from ..constants import LAP_DEFAULT_VALUE
 from ..utils import FontFamily, load_font
 
 
@@ -63,7 +64,7 @@ class FastestLapTimeWidget(DirtySprite):
 
         self._last_time_str = None
         self._render_border_and_header()  # border and header are static
-        self.set_lap(0.0)  # initial placeholder
+        self.set_lap(LAP_DEFAULT_VALUE)  # initial placeholder
         self.visible = 1
         self.dirty = 2
 
@@ -167,7 +168,7 @@ class FastestLapTimeWidget(DirtySprite):
         return f"{m:02d}:{s:02d}.{hh:02d}"
 
     def reset(self) -> None:
-        self.set_lap(1.0)
+        self.set_lap(LAP_DEFAULT_VALUE)
 
     def update(self, packet: TelemetryFrame | None, dt: float):
         lap_count = packet.lap_count

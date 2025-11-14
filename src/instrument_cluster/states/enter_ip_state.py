@@ -38,8 +38,6 @@ from ..ui.widgets.base.button import Button, ButtonEvents, ButtonGroup
 from ..ui.widgets.base.label import Label
 from ..ui.widgets.base.line import Line
 from ..ui.widgets.base.textfield import TextField
-
-# from .enter_url_state import EnterURLState
 from .setup_state import SetupState
 from .state import State
 
@@ -72,7 +70,7 @@ class EnterIPState(State):
             antialias=True,
             icon="\ue5cd",
             icon_color=Color.WHITE.rgb(),
-            icon_size=50,
+            icon_size=48,
             icon_position="center",
             icon_gap=0,
         )

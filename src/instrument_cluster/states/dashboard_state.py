@@ -109,22 +109,22 @@ class DashboardState(State):
             ),
             show_border=True,
         )
-        bestlap_widget = FastestLapTimeWidget(rect=(186, 68, 352, 92))
-        lastlap_widget = LapTimeWidget(rect=(870, 440, 286, 92))
+        fastestlaptime_widget = FastestLapTimeWidget(rect=(186, 68, 352, 92))
+        laptime_widget = LapTimeWidget(rect=(870, 440, 286, 92))
 
         feed = Feed()
         predictedlap_widget = PredictedLapTimeWidget(
             rect=(186, 163, 352, 92), feed=feed
         )
-        delta_widget = DeltaTimeWidget(rect=(870, 344, 286, 92), feed=feed)
+        deltatime_widget = DeltaTimeWidget(rect=(870, 344, 286, 92), feed=feed)
 
         self.widgets.add(
             gear_widget,
             speed_widget,
-            bestlap_widget,
+            fastestlaptime_widget,
             predictedlap_widget,
-            lastlap_widget,
-            delta_widget,
+            laptime_widget,
+            deltatime_widget,
             lap_widget,
         )
 

@@ -24,7 +24,7 @@ class GearWidget(DirtySprite):
         border_width: int = 2,
         border_radius: int = 4,
         show_border: bool = True,
-        header_margin: int = 0,  # brings `header_text` down by x pixels
+        header_margin: int = 3,  # brings `header_text` down by x pixels
         antialias: bool = True,
     ):
         super().__init__()

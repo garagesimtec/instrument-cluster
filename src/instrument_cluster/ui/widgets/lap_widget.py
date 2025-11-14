@@ -42,7 +42,7 @@ class LapWidget(DirtySprite):
             raise ValueError(f"Unsupported anchor: {anchor}")
 
         self.font_header = load_font(size=32, family=FontFamily.PIXEL_TYPE)
-        self.font_value = load_font(size=46, family=FontFamily.D_DIN_EXP_BOLD)
+        self.font_value = load_font(size=50, family=FontFamily.D_DIN_EXP_BOLD)
         self.header_text = header_text
         self.value_offset_y = 4
         self.bg_color = bg_color
