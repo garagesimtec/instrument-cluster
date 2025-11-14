@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pygame
 from pygame.sprite import LayeredDirty
 
 from ..addons.installer import (
@@ -24,7 +23,6 @@ from ..ui.utils import FontFamily, load_font
 from ..ui.widgets.base.button import Button, ButtonEvents, ButtonGroup
 from ..ui.widgets.base.label import Label
 from ..ui.widgets.base.line import Line
-from ..ui.widgets.base.textfield import TextField
 from .state import State
 
 
@@ -61,15 +59,15 @@ class EnterURLState(State):
 
         self.horizontal_line = Line()
 
-        self.textfield = TextField(
-            text=DEFAULT_TARBALL_URL,
-            font=load_font(size=24, family=FontFamily.PIXEL_TYPE),
-            color=Color.WHITE.rgb(),
-            pos=(self._w // 8, self._h // 4),
-            width=840,
-            height=60,
-            border_color=Color.GREY.rgb(),
-        )
+        # self.textfield = TextField(
+        #     text=DEFAULT_TARBALL_URL,
+        #     font=load_font(size=24, family=FontFamily.PIXEL_TYPE),
+        #     color=Color.WHITE.rgb(),
+        #     pos=(self._w // 8, self._h // 4),
+        #     width=840,
+        #     height=60,
+        #     border_color=Color.GREY.rgb(),
+        # )
 
         self.download_button = Button(
             rect=(self._w // 2 - 220, self._h // 2 - 40, 200, 70),
@@ -108,7 +106,7 @@ class EnterURLState(State):
         return LayeredDirty(
             [
                 self.title_label,
-                self.textfield,
+                # self.textfield,
                 *self.btns.sprites(),
             ]
         )
@@ -123,35 +121,26 @@ class EnterURLState(State):
 
     def handle_event(self, event) -> bool:
         self.btns.handle_event(event)
-        self.textfield.handle_event(event)
+        # self.textfield.handle_event(event)
 
         if event.type in (BUTTON_BACK_PRESSED, INSTALL_PRESSED):
-            return True  # consume
+            return True
 
         if event.type == BUTTON_BACK_RELEASED:
             from .setup_state import SetupState
 
             self.state_manager.change_state(SetupState(self.state_manager))
-            return True  # consume
+            return True
 
         if event.type == INSTALL_RELEASED:
             self._perform_install()
-            return True  # consume
-
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-            self._perform_install()
-            return True  # consume
-
-        if event.type == pygame.MOUSEBUTTONUP:
-            if self.download_button.rect.collidepoint(event.pos):
-                self._perform_install()
-                return True  # consume
+            return True
 
         return False
 
     def _perform_install(self):
         # Read URL and PS IP from config
-        url = (self.textfield.text or "").strip() or DEFAULT_TARBALL_URL
+        url = DEFAULT_TARBALL_URL
         cfg = ConfigManager.get_config()
         ps_ip = (getattr(cfg, "playstation_ip", "") or "").strip()
         if not ps_ip:
@@ -163,7 +152,7 @@ class EnterURLState(State):
             res: InstallResult = install_from_url(
                 url=url,
                 ps_ip=ps_ip,
-                sha256=None,
+                sha256="0c17048707a833826b1d16338703a6f9daa4793ab33b1cb7c3d48aaeb1f560c5",
                 jsonl_output="udp://127.0.0.1:5600",
             )
         except Exception as e:
@@ -203,27 +192,4 @@ class EnterURLState(State):
 
     def update(self, dt):
         super().update(dt)
-        self.textfield.update(dt)
-
-    # def draw(self, surface):
-    #     surface.fill(Color.BLACK.rgb())
-    #     self.title_label.draw(surface)
-
-    #     self.textfield.draw(surface)
-    #     self.btns.draw(surface)
-
-    #     if self._status:
-    #         s_font = load_font(size=28, family=FontFamily.PIXEL_TYPE)
-    #         s_txt = s_font.render(self._status, False, Color.WHITE.rgb())
-    #         s_rect = s_txt.get_rect(
-    #             center=(self._w // 2, self.textfield.rect.bottom + 40)
-    #         )
-    #         surface.blit(s_txt, s_rect.topleft)
-
-    #     if self._error:
-    #         e_font = load_font(size=28, family=FontFamily.PIXEL_TYPE)
-    #         e_txt = e_font.render(self._error, False, Color.LIGHTEST_RED.rgb())
-    #         e_rect = e_txt.get_rect(
-    #             center=(self._w // 2, self.textfield.rect.bottom + 180)
-    #         )
-    #         surface.blit(e_txt, e_rect.topleft)
+        # self.textfield.update(dt)
