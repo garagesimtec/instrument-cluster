@@ -152,7 +152,7 @@ class EnterURLState(State):
             res: InstallResult = install_from_url(
                 url=url,
                 ps_ip=ps_ip,
-                sha256="6f52111bcae4b9d44691551123b2baa01b72a19df7b5077aff9dee96d3297474",
+                sha256="d2d18c2ce9533cbeb377acc447d8754c8a4de7ab6aed6e22c7c546e35b0667fc",
                 jsonl_output="udp://127.0.0.1:5600",
             )
         except Exception as e:
