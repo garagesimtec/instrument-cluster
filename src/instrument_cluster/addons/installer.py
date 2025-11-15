@@ -28,8 +28,8 @@ UNIT_NAME = "instrument-cluster-proxy.service"
 DEFAULT_OUTPUT = "udp://127.0.0.1:5600"
 
 DEFAULT_TARBALL_URL = (
-    "https://github.com/chrshdl/granturismo/releases/download/v0.3.0/"
-    "granturismo-selfcontained-0.3.0.tar.gz"
+    "https://github.com/chrshdl/granturismo/releases/download/v0.3.1/"
+    "granturismo-selfcontained-0.3.1.tar.gz"
 )
 
 

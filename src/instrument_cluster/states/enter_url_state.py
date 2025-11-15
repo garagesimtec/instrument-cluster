@@ -148,11 +148,11 @@ class EnterURLState(State):
             return
 
         try:
-            self._status = "Downloading and installing…"
+            self._status = "Downloading and installing..."
             res: InstallResult = install_from_url(
                 url=url,
                 ps_ip=ps_ip,
-                sha256="0c17048707a833826b1d16338703a6f9daa4793ab33b1cb7c3d48aaeb1f560c5",
+                sha256="6f52111bcae4b9d44691551123b2baa01b72a19df7b5077aff9dee96d3297474",
                 jsonl_output="udp://127.0.0.1:5600",
             )
         except Exception as e:
